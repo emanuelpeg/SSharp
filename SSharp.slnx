@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="SSharp.CLI/SSharp.CLI.csproj" />
+  <Project Path="SSharp.Compiler/SSharp.Compiler.csproj" />
+  <Project Path="SSharp.Runtime/SSharp.Runtime.csproj" />
+  <Project Path="SSharp.Tests/SSharp.Tests.csproj" />
+</Solution>
