@@ -27,6 +27,7 @@ SSharp is a statically-typed, expression-based functional language that transpil
 SSharp/
 ├── SSharp.Compiler/     # Lexer, Parser, TypeChecker, CodeGenerator
 ├── SSharp.Runtime/      # Runtime library (List, Option, Unit, Predef)
+├── SSharp.Backend/      # Roslyn-based C# → .NET assembly compiler
 ├── SSharp.CLI/          # Command-line compiler driver
 └── SSharp.Tests/        # Unit tests for the compiler and transpiler
 ```
@@ -55,19 +56,33 @@ dotnet test
 
 ## Compiling SSharp Programs
 
-Use the `SSharp.CLI` to compile a `.ss` source file into C#:
+Use `SSharp.CLI` to compile a `.ss` source file:
 
 ```sh
-dotnet run --project SSharp.CLI -- <input-file.ss> [-o <output-file.cs>]
+dotnet run --project SSharp.CLI -- <input.ss> [options]
 ```
 
-**Example:**
+| Option | Description |
+|--------|-------------|
+| `-o <file.cs>` | Output path for the generated C# file (default: `<input>.cs`) |
+| `-c`, `--compile` | Also compile the C# to a runnable .NET assembly (`.dll`) |
+| `--out-dll <file.dll>` | Output path for the compiled assembly (default: `<input>.dll`) |
+| `--runtime-dll <path>` | Explicit path to `SSharp.Runtime.dll` (auto-discovered by default) |
 
+**Step 1 — Transpile to C# only:**
 ```sh
-dotnet run --project SSharp.CLI -- hello.ss -o hello.cs
+dotnet run --project SSharp.CLI -- hello.ss
+# → hello.cs
 ```
 
-If `-o` is omitted, the output file defaults to the same path as the input with a `.cs` extension.
+**Step 2 — Transpile and compile to a .NET executable:**
+```sh
+dotnet run --project SSharp.CLI -- hello.ss -c
+# → hello.cs  (C# source)
+# → hello.dll (runnable assembly)
+
+dotnet hello.dll
+```
 
 ---
 

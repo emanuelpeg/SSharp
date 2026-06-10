@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SSharp.Compiler\SSharp.Compiler.csproj" />
     <ProjectReference Include="..\SSharp.Runtime\SSharp.Runtime.csproj" />
+    <ProjectReference Include="..\SSharp.Backend\SSharp.Backend.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
