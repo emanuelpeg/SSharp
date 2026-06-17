@@ -161,4 +161,28 @@ public class TranspilerTests
         Assert.Contains("SSharp.Runtime.Cons<A>(var head, var tail) => (1 + length(tail)),", output);
         Assert.Contains("_ => throw new System.InvalidOperationException(\"Pattern match failed\")", output);
     }
+
+    [Fact]
+    public void TestInfixListPatternAndListFactory()
+    {
+        string source = @"
+            import ""SSharp.Runtime"";
+            
+            def len[T](l: List[T]): Int = l match {
+                case Nil => 0
+                case head::tail => 1 + len(tail)
+            };
+
+            def main(): Unit = {
+                val myList = List(1, 2, 3);
+                print(len(myList));
+            };
+        ";
+        string output = Transpile(source);
+
+        Assert.Contains("public static int len<T>(SSharp.Runtime.SSharpList<T> l) => (l) switch", output);
+        Assert.Contains("SSharp.Runtime.Nil<T> => 0,", output);
+        Assert.Contains("SSharp.Runtime.Cons<T>(var head, var tail) => (1 + len(tail)),", output);
+        Assert.Contains("var myList = List(1, 2, 3);", output);
+    }
 }

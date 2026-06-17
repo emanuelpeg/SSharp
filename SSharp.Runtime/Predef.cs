@@ -20,4 +20,14 @@ public static class Predef
     {
         return Console.ReadLine() ?? "";
     }
+
+    public static SSharpList<T> List<T>(params T[] items)
+    {
+        SSharpList<T> list = new Nil<T>();
+        for (int i = items.Length - 1; i >= 0; i--)
+        {
+            list = new Cons<T>(items[i], list);
+        }
+        return list;
+    }
 }

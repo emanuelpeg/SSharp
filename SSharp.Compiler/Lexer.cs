@@ -61,7 +61,9 @@ public class Lexer
             case '}': return MakeToken(TokenType.RBrace);
             case '[': return MakeToken(TokenType.LBracket);
             case ']': return MakeToken(TokenType.RBracket);
-            case ':': return MakeToken(TokenType.Colon);
+            case ':':
+                if (Match(':')) return MakeToken(TokenType.ColonColon);
+                return MakeToken(TokenType.Colon);
             case ',': return MakeToken(TokenType.Comma);
             case '.': return MakeToken(TokenType.Dot);
             case ';': return MakeToken(TokenType.Semicolon);

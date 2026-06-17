@@ -138,7 +138,7 @@ public class CodeGenerator
                     }
                     else
                     {
-                        string parameters = string.Join(", ", cls.ConstructorParams.Select(p => $"{MapTypeNode(p.Type)} {p.Name}"));
+                        string parameters = string.Join(", ", cls.ConstructorParams.Select(p => $"{MapTypeNode(p.Type)} {EscapeIdentifier(p.Name)}"));
                         return $"{spaces}public record {cls.Name}{tparams}({parameters}){extends};";
                     }
                 }
@@ -161,7 +161,7 @@ public class CodeGenerator
 
                     if (indent == 4)
                     {
-                        return $"{spaces}public static readonly {typeStr} {val.Name} = {GenerateExpr(val.Value)};";
+                        return $"{spaces}public static readonly {typeStr} {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
                     }
                     else
                     {
@@ -186,12 +186,12 @@ public class CodeGenerator
                         retType = "object";
                     }
 
-                    string parameters = string.Join(", ", fun.Params.Select(p => $"{MapTypeNode(p.Type)} {p.Name}"));
+                    string parameters = string.Join(", ", fun.Params.Select(p => $"{MapTypeNode(p.Type)} {EscapeIdentifier(p.Name)}"));
                     
                     if (fun.Body is BlockExpr block)
                     {
                         var sb = new StringBuilder();
-                        sb.AppendLine($"{spaces}public static {retType} {fun.Name}{tparams}({parameters})");
+                        sb.AppendLine($"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters})");
                         sb.AppendLine($"{spaces}{{");
                         sb.Append(GenerateBlockBody(block, indent + 4, retType));
                         sb.AppendLine();
@@ -200,7 +200,7 @@ public class CodeGenerator
                     }
                     else
                     {
-                        return $"{spaces}public static {retType} {fun.Name}{tparams}({parameters}) => {GenerateExpr(fun.Body)};";
+                        return $"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters}) => {GenerateExpr(fun.Body)};";
                     }
                 }
 
@@ -215,7 +215,7 @@ public class CodeGenerator
         switch (decl)
         {
             case ValDecl val:
-                return $"{spaces}var {val.Name} = {GenerateExpr(val.Value)};";
+                return $"{spaces}var {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
 
             case FunDecl fun:
                 {
@@ -326,11 +326,27 @@ public class CodeGenerator
                 return "SSharp.Runtime.Unit.Instance";
 
             case IdentifierExpr id:
+                if (id.Name == "Nil")
+                {
+                    if (_resolvedTypes.TryGetValue(id, out var t) && t is GenericType gt && gt.TypeArgs.Count > 0)
+                    {
+                        return $"new SSharp.Runtime.Nil<{MapType(gt.TypeArgs[0])}>()";
+                    }
+                    return "new SSharp.Runtime.Nil<object>()";
+                }
+                if (id.Name == "None")
+                {
+                    if (_resolvedTypes.TryGetValue(id, out var t) && t is GenericType gt && gt.TypeArgs.Count > 0)
+                    {
+                        return $"new SSharp.Runtime.None<{MapType(gt.TypeArgs[0])}>()";
+                    }
+                    return "new SSharp.Runtime.None<object>()";
+                }
                 if (_caseObjects.Contains(id.Name))
                 {
                     return $"{id.Name}.Instance";
                 }
-                return id.Name;
+                return EscapeIdentifier(id.Name);
 
             case BinaryExpr bin:
                 return $"({GenerateExpr(bin.Lhs)} {bin.Op.Lexeme} {GenerateExpr(bin.Rhs)})";
@@ -347,11 +363,40 @@ public class CodeGenerator
             case CallExpr call:
                 {
                     string calleeStr = GenerateExpr(call.Callee);
-                    string typeArgsStr = call.TypeArgs.Count > 0 
+
+                    if (_resolvedTypes.TryGetValue(call.Callee, out var calleeType) && calleeType is FunctionType funType)
+                    {
+                        int expectedCount = funType.ParamTypes.Count;
+                        int actualCount = call.Arguments.Count;
+                        if (actualCount < expectedCount)
+                        {
+                            var remainingTypes = funType.ParamTypes.GetRange(actualCount, expectedCount - actualCount);
+                            var remainingNames = Enumerable.Range(0, remainingTypes.Count).Select(i => $"_p{i}").ToList();
+
+                            string delegateType = remainingTypes.Count == 0 
+                                ? $"System.Func<{MapType(funType.ReturnType)}>"
+                                : $"System.Func<{string.Join(", ", remainingTypes.Select(MapType))}, {MapType(funType.ReturnType)}>";
+
+                            var allArgs = new List<string>();
+                            for (int i = 0; i < actualCount; i++)
+                            {
+                                allArgs.Add(GenerateExpr(call.Arguments[i]));
+                            }
+                            allArgs.AddRange(remainingNames);
+
+                            string typeArgsStr = call.TypeArgs.Count > 0 
+                                ? $"<{string.Join(", ", call.TypeArgs.Select(MapTypeNode))}>"
+                                : "";
+
+                            return $"new {delegateType}(({string.Join(", ", remainingNames)}) => {calleeStr}{typeArgsStr}({string.Join(", ", allArgs)}))";
+                        }
+                    }
+
+                    string typeArgsStr2 = call.TypeArgs.Count > 0 
                         ? $"<{string.Join(", ", call.TypeArgs.Select(MapTypeNode))}>"
                         : "";
                     string argsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
-                    return $"{calleeStr}{typeArgsStr}({argsStr})";
+                    return $"{calleeStr}{typeArgsStr2}({argsStr})";
                 }
 
             case LambdaExpr lambda:
@@ -632,6 +677,24 @@ public class CodeGenerator
                 ? $"{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
                 : node.Name
         };
+    }
+
+    // Helper to escape C# reserved keywords in generated identifiers
+    private static readonly HashSet<string> CSharpKeywords = new HashSet<string>
+    {
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach",
+        "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock", "long",
+        "namespace", "new", "null", "object", "operator", "out", "override", "params", "private", "protected",
+        "public", "readonly", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static",
+        "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong",
+        "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"
+    };
+
+    private static string EscapeIdentifier(string name)
+    {
+        return CSharpKeywords.Contains(name) ? $"@{name}" : name;
     }
 
     private static string EscapeString(string s)

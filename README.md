@@ -66,6 +66,7 @@ dotnet run --project SSharp.CLI -- <input.ss> [options]
 |--------|-------------|
 | `-o <file.cs>` | Output path for the generated C# file (default: `<input>.cs`) |
 | `-c`, `--compile` | Also compile the C# to a runnable .NET assembly (`.dll`) |
+| `-r`, `--run` | Transpile, compile to a runnable assembly, and execute it immediately |
 | `--out-dll <file.dll>` | Output path for the compiled assembly (default: `<input>.dll`) |
 | `--runtime-dll <path>` | Explicit path to `SSharp.Runtime.dll` (auto-discovered by default) |
 
@@ -82,6 +83,14 @@ dotnet run --project SSharp.CLI -- hello.ss -c
 # → hello.dll (runnable assembly)
 
 dotnet hello.dll
+```
+
+**Step 3 — Transpile, compile, and run immediately:**
+```sh
+dotnet run --project SSharp.CLI -- hello.ss -r
+# → hello.cs  (C# source)
+# → hello.dll (runnable assembly)
+# → Runs the compiled program directly
 ```
 
 ---

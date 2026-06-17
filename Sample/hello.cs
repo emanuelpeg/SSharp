@@ -23,13 +23,26 @@ public static class Program
     _ => throw new System.InvalidOperationException("Pattern match failed")
 };
     public static int factorial(int n) => ((n <= 1) ? 1 : (n * factorial((n - 1))));
+    public static int len<T>(SSharp.Runtime.SSharpList<T> l, int @default) => (l) switch
+{
+    SSharp.Runtime.Nil<T> => @default,
+    SSharp.Runtime.Cons<T>(var head, var tail) => (1 + len(tail, @default)),
+    _ => throw new System.InvalidOperationException("Pattern match failed")
+};
+    public static int lenDef<T>(SSharp.Runtime.SSharpList<T> l) => len(l, 0);
+    public static int sum(int x, int y) => (x + y);
     public static SSharp.Runtime.Unit main()
     {
         var c = Circle(5d);
         var r = Rectangle(4d, 6d);
+        var l = List(1, 2, 3);
+        var add2 = new System.Func<int, int>((_p0) => sum(2, _p0));
         println(("Circle area: " + area(c)));
         println(("Rectangle area: " + area(r)));
-        return println(("5! = " + factorial(5)));
+        println(("5! = " + factorial(5)));
+        println(("length of list [1, 2, 3] = " + len(l, 0)));
+        println(("length of list [1, 2, 3] = " + lenDef(l)));
+        return println(("add 2 to 3= " + add2(3)));
     }
     public static void Main(string[] args)
     {

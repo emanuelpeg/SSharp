@@ -47,6 +47,7 @@ public enum TokenType
     LBracket,   // [
     RBracket,   // ]
     Colon,      // :
+    ColonColon, // ::
     Comma,      // ,
     Dot,        // .
     Semicolon,  // ;

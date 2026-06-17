@@ -17,10 +17,11 @@ public static class Program
         Console.WriteLine("                       (defaults to <input-file>.cs)");
         Console.WriteLine("  -c, --compile        Compile the generated C# to a .NET executable (.dll)");
         Console.WriteLine("                       (defaults to <input-file>.dll)");
+        Console.WriteLine("  -r, --run            Compile and run the SSharp program");
         Console.WriteLine("  --out-dll <path>     Output path for the compiled .dll");
-        Console.WriteLine("                       (only used with -c / --compile)");
+        Console.WriteLine("                       (only used with -c / --compile or -r / --run)");
         Console.WriteLine("  --runtime-dll <path> Explicit path to SSharp.Runtime.dll");
-        Console.WriteLine("                       (only used with -c / --compile)");
+        Console.WriteLine("                       (only used with -c / --compile or -r / --run)");
     }
 
     public static int Main(string[] args)
@@ -36,6 +37,7 @@ public static class Program
         string outputDll    = "";
         string runtimeDll   = "";
         bool   doCompile    = false;
+        bool   doRun        = false;
 
         for (int i = 1; i < args.Length; i++)
         {
@@ -47,6 +49,12 @@ public static class Program
 
                 case "-c":
                 case "--compile":
+                    doCompile = true;
+                    break;
+
+                case "-r":
+                case "--run":
+                    doRun = true;
                     doCompile = true;
                     break;
 
@@ -64,6 +72,8 @@ public static class Program
                     return 1;
             }
         }
+
+        int totalSteps = doRun ? 3 : (doCompile ? 2 : 1);
 
         if (string.IsNullOrEmpty(outputCs))
             outputCs = Path.ChangeExtension(inputFile, ".cs");
@@ -123,7 +133,7 @@ public static class Program
             string generatedCs = codeGen.Generate(ast);
 
             File.WriteAllText(outputCs, generatedCs);
-            Console.WriteLine($"  [1/2] C# source  → {outputCs}");
+            Console.WriteLine($"  [1/{totalSteps}] C# source  → {outputCs}");
 
             // ── 5. (Optional) Roslyn Compilation ────────────────────────────
             if (!doCompile)
@@ -132,7 +142,7 @@ public static class Program
                 return 0;
             }
 
-            Console.WriteLine($"  [2/2] Compiling  → {outputDll}");
+            Console.WriteLine($"  [2/{totalSteps}] Compiling  → {outputDll}");
 
             var backend = new CSharpBackend();
             var result  = backend.Compile(
@@ -148,8 +158,35 @@ public static class Program
                 return 1;
             }
 
-            Console.WriteLine($"Done. Run with: dotnet {outputDll}");
-            return 0;
+            if (!doRun)
+            {
+                Console.WriteLine($"Done. Run with: dotnet {outputDll}");
+                return 0;
+            }
+
+            Console.WriteLine($"  [3/3] Running    → {outputDll}");
+            try
+            {
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"\"{outputDll}\"",
+                    UseShellExecute = false
+                };
+                using var process = System.Diagnostics.Process.Start(psi);
+                if (process == null)
+                {
+                    Console.Error.WriteLine("Error: Failed to start the dotnet process.");
+                    return 1;
+                }
+                process.WaitForExit();
+                return process.ExitCode;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error during execution: {ex.Message}");
+                return 1;
+            }
         }
         catch (Exception ex)
         {

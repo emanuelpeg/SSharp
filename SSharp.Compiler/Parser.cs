@@ -187,19 +187,22 @@ public class Parser
             Consume(TokenType.RBracket, "Expected ']' after type parameters.");
         }
 
-        Consume(TokenType.LParen, "Expected '(' after function name.");
         var @params = new List<Param>();
-        if (!Check(TokenType.RParen))
+        do
         {
-            do
+            Consume(TokenType.LParen, "Expected '(' before parameter list.");
+            if (!Check(TokenType.RParen))
             {
-                Token paramName = Consume(TokenType.Identifier, "Expected parameter name.");
-                Consume(TokenType.Colon, "Expected ':' after parameter name.");
-                TypeNode paramType = ParseType();
-                @params.Add(new Param(paramName.Lexeme, paramType, paramName.Line, paramName.Column));
-            } while (Match(TokenType.Comma));
-        }
-        Consume(TokenType.RParen, "Expected ')' after parameters.");
+                do
+                {
+                    Token paramName = Consume(TokenType.Identifier, "Expected parameter name.");
+                    Consume(TokenType.Colon, "Expected ':' after parameter name.");
+                    TypeNode paramType = ParseType();
+                    @params.Add(new Param(paramName.Lexeme, paramType, paramName.Line, paramName.Column));
+                } while (Match(TokenType.Comma));
+            }
+            Consume(TokenType.RParen, "Expected ')' after parameter list.");
+        } while (Check(TokenType.LParen));
 
         TypeNode? returnType = null;
         if (Match(TokenType.Colon))
@@ -400,7 +403,7 @@ public class Parser
         return new MatchCase(pattern, body, caseToken.Line, caseToken.Column);
     }
 
-    private Pattern ParsePattern()
+    private Pattern ParsePrimaryPattern()
     {
         Token token = Advance();
         switch (token.Type)
@@ -445,6 +448,20 @@ public class Parser
                 Error(token, "Expected pattern.");
                 return new WildcardPattern(token.Line, token.Column);
         }
+    }
+
+    private Pattern ParsePattern()
+    {
+        Pattern pattern = ParsePrimaryPattern();
+
+        while (Match(TokenType.ColonColon))
+        {
+            Token op = Previous();
+            Pattern right = ParsePattern(); // Right-associative recursion
+            pattern = new ConstructorPattern("Cons", new List<Pattern> { pattern, right }, op.Line, op.Column);
+        }
+
+        return pattern;
     }
 
     private Expr ParseBlockExpr(Token braceToken)

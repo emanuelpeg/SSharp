@@ -95,6 +95,7 @@ public class TypeChecker
         // Register Nil case object
         _classes["Nil"] = new ClassDecl("Nil", new List<string>(), new List<Param>(), new TypeNode("List", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
         _env.Define("Nil", new GenericType("List", new List<SSharpType> { SSharpType.Any }));
+        _env.Define("List", new PrimitiveType("ListFactory"));
 
         // Register Option trait
         _traits["Option"] = new TraitDecl("Option", new List<string> { "A" }, 0, 0);
@@ -393,13 +394,39 @@ public class TypeChecker
 
             case CallExpr call:
                 SSharpType calleeType = CheckExpr(call.Callee);
+                if (calleeType is PrimitiveType factoryPt && factoryPt.Name == "ListFactory")
+                {
+                    SSharpType elementCommonType = SSharpType.Any;
+                    if (call.Arguments.Count > 0)
+                    {
+                        elementCommonType = CheckExpr(call.Arguments[0]);
+                        for (int i = 1; i < call.Arguments.Count; i++)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[i]);
+                            if (IsSubtype(argType, elementCommonType)) { }
+                            else if (IsSubtype(elementCommonType, argType))
+                            {
+                                elementCommonType = argType;
+                            }
+                            else
+                            {
+                                elementCommonType = SSharpType.Any;
+                            }
+                        }
+                    }
+                    return new GenericType("List", new List<SSharpType> { elementCommonType });
+                }
                 if (calleeType is FunctionType funType)
                 {
-                    if (funType.ParamTypes.Count != call.Arguments.Count)
+                    int expectedCount = funType.ParamTypes.Count;
+                    int actualCount = call.Arguments.Count;
+
+                    if (actualCount > expectedCount)
                     {
-                        Error(call.Line, call.Column, $"Function expected {funType.ParamTypes.Count} arguments, but got {call.Arguments.Count}.");
+                        Error(call.Line, call.Column, $"Function expected {expectedCount} arguments, but got {actualCount}.");
                     }
-                    for (int i = 0; i < Math.Min(funType.ParamTypes.Count, call.Arguments.Count); i++)
+
+                    for (int i = 0; i < Math.Min(expectedCount, actualCount); i++)
                     {
                         SSharpType argType = CheckExpr(call.Arguments[i]);
                         // If callee has generic parameters that we're passing, we can skip strict checks or bind type variables
@@ -415,6 +442,14 @@ public class TypeChecker
                             Error(call.Line, call.Column, $"Argument {i + 1} type mismatch: expected {expected}, but got {argType}.");
                         }
                     }
+
+                    if (actualCount < expectedCount)
+                    {
+                        // Partial application: return a function taking the remaining parameters
+                        var remainingParams = funType.ParamTypes.GetRange(actualCount, expectedCount - actualCount);
+                        return new FunctionType(remainingParams, funType.ReturnType);
+                    }
+
                     return funType.ReturnType;
                 }
                 // If it is a generic constructor check (e.g. Cons(1, Nil)), or a direct Type constructor call
@@ -578,6 +613,7 @@ public class TypeChecker
     private bool IsSubtype(SSharpType sub, SSharpType super)
     {
         if (super == SSharpType.Any) return true;
+        if (super is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0])) return true;
         if (sub == super) return true;
 
         if (sub is PrimitiveType subPt && super is PrimitiveType superPt)
