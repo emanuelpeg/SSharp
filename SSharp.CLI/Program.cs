@@ -8,6 +8,19 @@ namespace SSharp.CLI;
 
 public static class Program
 {
+    // Helper to display errors in a Rust-like style
+    private static void PrintError(string kind, string message, string file, int? line = null, int? col = null)
+    {
+        // Format: error[kind]: message
+        //   --> file:line:col
+        if (line.HasValue && col.HasValue)
+            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}:{line}:{col}");
+        else if (line.HasValue)
+            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}:{line}");
+        else
+            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}");
+    }
+    // Existing PrintUsage method follows
     private static void PrintUsage()
     {
         Console.WriteLine("Usage: SSharp.CLI <input-file.ss> [options]");
@@ -23,6 +36,8 @@ public static class Program
         Console.WriteLine("  --runtime-dll <path> Explicit path to SSharp.Runtime.dll");
         Console.WriteLine("                       (only used with -c / --compile or -r / --run)");
     }
+
+
 
     public static int Main(string[] args)
     {
@@ -100,7 +115,7 @@ public static class Program
             {
                 Console.Error.WriteLine("Lexer errors:");
                 foreach (var err in lexerErrors)
-                    Console.Error.WriteLine($"  [{err.Line}:{err.Column}] {err.Value}");
+                    PrintError("lexer", $"[{err.Line}:{err.Column}] {err.Value}", inputFile, err.Line, err.Column);
                 return 1;
             }
 
@@ -112,7 +127,7 @@ public static class Program
             {
                 Console.Error.WriteLine("Parser errors:");
                 foreach (var err in parser.Errors)
-                    Console.Error.WriteLine($"  {err}");
+                    PrintError("parser", err, inputFile);
                 return 1;
             }
 
@@ -124,7 +139,7 @@ public static class Program
             {
                 Console.Error.WriteLine("Type errors:");
                 foreach (var err in typeChecker.Errors)
-                    Console.Error.WriteLine($"  {err}");
+                    PrintError("type", err, inputFile);
                 return 1;
             }
 
@@ -154,7 +169,7 @@ public static class Program
             {
                 Console.Error.WriteLine("Roslyn compilation errors:");
                 foreach (var err in result.Errors)
-                    Console.Error.WriteLine($"  {err}");
+                    PrintError("compile", err, outputDll);
                 return 1;
             }
 
