@@ -185,4 +185,70 @@ public class TranspilerTests
         Assert.Contains("SSharp.Runtime.Cons<T>(var head, var tail) => (1 + len(tail)),", output);
         Assert.Contains("var myList = List(1, 2, 3);", output);
     }
+
+    [Fact]
+    public void TestTailrecOptimization()
+    {
+        string source = @"
+            import ""SSharp.Runtime"";
+
+            @tailrec
+            def sumList(l: List[Int], acc: Int): Int = l match {
+                case Nil => acc
+                case head::tail => sumList(tail, acc + head)
+            };
+        ";
+        string output = Transpile(source);
+
+        Assert.Contains("while (true)", output);
+        Assert.Contains("SSharp.Runtime.SSharpList<int> _tailrec_temp_l_0 = tail;", output);
+        Assert.Contains("int _tailrec_temp_acc_1 = (acc + head);", output);
+        Assert.Contains("l = _tailrec_temp_l_0;", output);
+        Assert.Contains("acc = _tailrec_temp_acc_1;", output);
+        Assert.Contains("continue;", output);
+    }
+
+    [Fact]
+    public void TestTailrecValidationErrors()
+    {
+        // 1. Not recursive
+        string source1 = @"
+            @tailrec
+            def add(a: Int, b: Int): Int = a + b;
+        ";
+        var ex1 = Assert.Throws<Exception>(() => Transpile(source1));
+        Assert.Contains("it contains no recursive calls", ex1.Message);
+
+        // 2. Recursive but not in tail position
+        string source2 = @"
+            @tailrec
+            def factorial(n: Int): Int =
+                if (n <= 1) 1 else n * factorial(n - 1);
+        ";
+        var ex2 = Assert.Throws<Exception>(() => Transpile(source2));
+        Assert.Contains("Recursive call to 'factorial' is not in tail position", ex2.Message);
+    }
+
+    [Fact]
+    public void TestLazyParameters()
+    {
+        string source = @"
+            def and(a: Boolean, b: => Boolean): Boolean =
+                if (a) b else false;
+
+            def andThin(a: Boolean, b: -> Boolean): Boolean =
+                if (a) b else false;
+
+            def main(): Unit = {
+                val res = and(true, true);
+                val res2 = andThin(false, true);
+            };
+        ";
+        string output = Transpile(source);
+
+        Assert.Contains("public static bool and(bool a, System.Func<bool> b) => (a ? b() : false);", output);
+        Assert.Contains("public static bool andThin(bool a, System.Func<bool> b) => (a ? b() : false);", output);
+        Assert.Contains("and(true, new System.Func<bool>(() => true))", output);
+        Assert.Contains("andThin(false, new System.Func<bool>(() => true))", output);
+    }
 }

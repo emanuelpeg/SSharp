@@ -28,6 +28,11 @@ public record FunctionType(List<SSharpType> ParamTypes, SSharpType ReturnType) :
     public override string ToString() => $"({string.Join(", ", ParamTypes)}) => {ReturnType}";
 }
 
+public record ByNameType(SSharpType UnderType) : SSharpType
+{
+    public override string ToString() => $"=> {UnderType}";
+}
+
 public class TypeChecker
 {
     private class Env
@@ -217,7 +222,8 @@ public class TypeChecker
                 foreach (var param in funDecl.Params)
                 {
                     SSharpType pType = ResolveType(param.Type);
-                    _env.Define(param.Name, pType);
+                    SSharpType pBodyType = pType is ByNameType bt ? bt.UnderType : pType;
+                    _env.Define(param.Name, pBodyType);
                     paramTypesList.Add(pType);
                 }
 
@@ -243,6 +249,16 @@ public class TypeChecker
                 else
                 {
                     expectedRetType = bodyType;
+                }
+
+                if (funDecl.IsTailRec)
+                {
+                    int recursiveCallCount = 0;
+                    ValidateTailCalls(funDecl.Body, funDecl.Name, true, ref recursiveCallCount);
+                    if (recursiveCallCount == 0)
+                    {
+                        Error(funDecl.Line, funDecl.Column, $"Could not optimize @tailrec annotated function '{funDecl.Name}': it contains no recursive calls.");
+                    }
                 }
 
                 // Restore environment
@@ -432,14 +448,15 @@ public class TypeChecker
                         // If callee has generic parameters that we're passing, we can skip strict checks or bind type variables
                         // For a simple v1, we check subtype or allow matching generic parameter names (like T, A)
                         SSharpType expected = funType.ParamTypes[i];
-                        if (expected is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0]))
+                        SSharpType expectedCheck = expected is ByNameType bt ? bt.UnderType : expected;
+                        if (expectedCheck is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0]))
                         {
                             // This is a type variable (e.g. A, T) - accept any type here (simplifying type inference)
                             continue;
                         }
-                        if (!IsSubtype(argType, expected))
+                        if (!IsSubtype(argType, expectedCheck))
                         {
-                            Error(call.Line, call.Column, $"Argument {i + 1} type mismatch: expected {expected}, but got {argType}.");
+                            Error(call.Line, call.Column, $"Argument {i + 1} type mismatch: expected {expectedCheck}, but got {argType}.");
                         }
                     }
 
@@ -590,6 +607,11 @@ public class TypeChecker
 
     private SSharpType ResolveType(TypeNode node)
     {
+        if (node.IsLazy)
+        {
+            var nonLazyNode = node with { IsLazy = false };
+            return new ByNameType(ResolveType(nonLazyNode));
+        }
         if (node.Name == "Int") return SSharpType.Int;
         if (node.Name == "Double") return SSharpType.Double;
         if (node.Name == "String") return SSharpType.String;
@@ -648,6 +670,99 @@ public class TypeChecker
             return true;
         }
 
+        return false;
+    }
+
+    private void ValidateTailCalls(Expr expr, string funName, bool inTailPosition, ref int recursiveCallCount)
+    {
+        switch (expr)
+        {
+            case LiteralExpr:
+            case UnitExpr:
+            case IdentifierExpr:
+                break;
+
+            case BinaryExpr bin:
+                ValidateTailCalls(bin.Lhs, funName, false, ref recursiveCallCount);
+                ValidateTailCalls(bin.Rhs, funName, false, ref recursiveCallCount);
+                break;
+
+            case UnaryExpr unary:
+                ValidateTailCalls(unary.Expr, funName, false, ref recursiveCallCount);
+                break;
+
+            case BlockExpr block:
+                foreach (var elem in block.Elements)
+                {
+                    if (elem is Expr e)
+                    {
+                        ValidateTailCalls(e, funName, false, ref recursiveCallCount);
+                    }
+                    else if (elem is ValDecl valD)
+                    {
+                        ValidateTailCalls(valD.Value, funName, false, ref recursiveCallCount);
+                    }
+                    else if (elem is FunDecl funD)
+                    {
+                        ValidateTailCalls(funD.Body, funName, false, ref recursiveCallCount);
+                    }
+                }
+                if (block.FinalExpr != null)
+                {
+                    ValidateTailCalls(block.FinalExpr, funName, inTailPosition, ref recursiveCallCount);
+                }
+                break;
+
+            case IfExpr ifExpr:
+                ValidateTailCalls(ifExpr.Condition, funName, false, ref recursiveCallCount);
+                ValidateTailCalls(ifExpr.ThenBranch, funName, inTailPosition, ref recursiveCallCount);
+                ValidateTailCalls(ifExpr.ElseBranch, funName, inTailPosition, ref recursiveCallCount);
+                break;
+
+            case MatchExpr matchExpr:
+                ValidateTailCalls(matchExpr.Expression, funName, false, ref recursiveCallCount);
+                foreach (var c in matchExpr.Cases)
+                {
+                    ValidateTailCalls(c.Body, funName, inTailPosition, ref recursiveCallCount);
+                }
+                break;
+
+            case CallExpr call:
+                if (IsRecursiveCall(call, funName))
+                {
+                    recursiveCallCount++;
+                    if (!inTailPosition)
+                    {
+                        Error(call.Line, call.Column, $"Recursive call to '{funName}' is not in tail position.");
+                    }
+                }
+                else
+                {
+                    ValidateTailCalls(call.Callee, funName, false, ref recursiveCallCount);
+                }
+
+                foreach (var arg in call.Arguments)
+                {
+                    ValidateTailCalls(arg, funName, false, ref recursiveCallCount);
+                }
+                break;
+
+            case LambdaExpr lambda:
+                ValidateTailCalls(lambda.Body, funName, false, ref recursiveCallCount);
+                break;
+        }
+    }
+
+    private bool IsRecursiveCall(CallExpr call, string funName)
+    {
+        if (call.Callee is IdentifierExpr id && id.Name == funName)
+        {
+            return true;
+        }
+        if (call.Callee is CallExpr innerCall)
+        {
+            return IsRecursiveCall(innerCall, funName);
+        }
         return false;
     }
 }

@@ -2,10 +2,10 @@ using System.Collections.Generic;
 
 namespace SSharp.Compiler;
 
-public record TypeNode(string Name, List<TypeNode> TypeArgs)
+public record TypeNode(string Name, List<TypeNode> TypeArgs, bool IsLazy = false)
 {
-    public TypeNode(string name) : this(name, new List<TypeNode>()) { }
-    public override string ToString() => TypeArgs.Count == 0 ? Name : $"{Name}[{string.Join(", ", TypeArgs)}]";
+    public TypeNode(string name) : this(name, new List<TypeNode>(), false) { }
+    public override string ToString() => IsLazy ? $"=> {Name}" : (TypeArgs.Count == 0 ? Name : $"{Name}[{string.Join(", ", TypeArgs)}]");
 }
 
 public abstract record ASTNode;
@@ -23,7 +23,7 @@ public record ValDecl(string Name, TypeNode? Type, Expr Value, int Line, int Col
 
 public record Param(string Name, TypeNode Type, int Line, int Column);
 
-public record FunDecl(string Name, List<string> TypeParams, List<Param> Params, TypeNode? ReturnType, Expr Body, int Line, int Column) : Decl;
+public record FunDecl(string Name, List<string> TypeParams, List<Param> Params, TypeNode? ReturnType, Expr Body, int Line, int Column, bool IsTailRec = false) : Decl;
 
 public record TraitDecl(string Name, List<string> TypeParams, int Line, int Column) : Decl;
 

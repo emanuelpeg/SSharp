@@ -55,6 +55,7 @@ public class Lexer
         char c = Advance();
         switch (c)
         {
+            case '@': return MakeToken(TokenType.At);
             case '(': return MakeToken(TokenType.LParen);
             case ')': return MakeToken(TokenType.RParen);
             case '{': return MakeToken(TokenType.LBrace);
@@ -70,7 +71,9 @@ public class Lexer
             case '_': return MakeToken(TokenType.Underscore);
             
             case '+': return MakeToken(TokenType.Plus);
-            case '-': return MakeToken(TokenType.Minus);
+            case '-':
+                if (Match('>')) return MakeToken(TokenType.ArrowThin);
+                return MakeToken(TokenType.Minus);
             case '*': return MakeToken(TokenType.Asterisk);
             case '%': return MakeToken(TokenType.Percent);
 

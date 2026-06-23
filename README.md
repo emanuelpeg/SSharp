@@ -9,14 +9,16 @@ SSharp is a statically-typed, expression-based functional language that transpil
 ## Features
 
 - **Immutable bindings** with `val`
-- **First-class functions** and lambdas
+- **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
-- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, and wildcard patterns)
+- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, and **infix list `head::tail` patterns**)
+- **List Factory** for easy construction of lists (`List(1, 2, 3)`) with automatic common supertype inference
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
 - **Generic functions** and data types
-- **Recursive functions**
+- **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
 - **Runtime library**: `List[A]` (singly-linked), `Option[A]`, and standard `print`/`println`/`readLine`
+- **Rust-style compiler diagnostics** — informative formatting pinpointing file, line, and column for errors
 - **Transpiles to C#** — output is clean, human-readable C# source code
 
 ---
@@ -93,6 +95,15 @@ dotnet run --project SSharp.CLI -- hello.ss -r
 # → Runs the compiled program directly
 ```
 
+### Compiler Diagnostics
+
+SSharp features Rust-like diagnostic error reporting to make debugging compilation issues straightforward, indicating the error category and targeting the exact file, line, and column:
+
+```text
+error[type]: Argument 1 type mismatch: expected Double, but got Int
+   --> hello.ss:20:25
+```
+
 ---
 
 ## Language Guide
@@ -110,6 +121,16 @@ val message = "Hello, World!"
 def add(a: Int, b: Int): Int = a + b
 
 def greet(name: String): String = "Hello, " + name
+```
+
+SSharp also supports functions with **multiple parameter lists** (currying) and **partial application**:
+
+```scala
+// Function with multiple parameter lists
+def sum(x: Int)(y: Int): Int = x + y
+
+// Partial application (returns a function of type: Int => Int)
+val add2 = sum(2)
 ```
 
 ### Lambdas
@@ -157,19 +178,37 @@ def area(s: Shape): Double = s match {
 
 ### Recursive Functions
 
+Standard recursion is supported:
+
 ```scala
 def factorial(n: Int): Int =
     if (n <= 1) 1 else n * factorial(n - 1)
 ```
 
+For tail-recursive functions, you can add the `@tailrec` annotation. The compiler will validate that the function is indeed tail-recursive and compile it into an optimized, stack-safe imperative loop in C#:
+
+```scala
+@tailrec
+def len[T](l: List[T])(default : Int): Int = l match {
+    case Nil => default
+    case head::tail => len(tail, default + 1)
+}
+```
+
 ### Working with Lists
+
+SSharp includes built-in support for constructing lists using the `List` factory, and matching elements using the infix `::` operator:
 
 ```scala
 import "SSharp.Runtime"
 
+// Construction using List(...)
+val myList = List(1, 2, 3)
+
+// Matching with infix cons (::) operator
 def length[A](list: List[A]): Int = list match {
-    case Nil         => 0
-    case Cons(_, t)  => 1 + length(t)
+    case Nil        => 0
+    case head::tail => 1 + length(tail)
 }
 ```
 
@@ -192,9 +231,10 @@ def area(s: Shape): Double = s match {
 def factorial(n: Int): Int =
     if (n <= 1) 1 else n * factorial(n - 1)
 
+@tailrec
 def len[T](l: List[T])(default : Int): Int = l match {
     case Nil => default
-    case head::tail => 1 + len(tail, default)
+    case head::tail => len(tail, default + 1)
 }
 
 def lenDef[T](l: List[T]): Int = len(l, 0)
@@ -213,12 +253,16 @@ def main(): Unit = {
     println("length of list [1, 2, 3] = " + len(l, 0))
     println("length of list [1, 2, 3] = " + lenDef(l))
     println("add 2 to 3= " + add2(3))
+    val resultAdd2 = if (add2(10) == 12) "Yes" else "No" 
+    println("add 2 to 10= " + resultAdd2) 
 }
 ```
 
 **Generated C# output:**
 
 ```csharp
+using System;
+using System.Collections.Generic;
 using SSharp.Runtime;
 using static SSharp.Runtime.Predef;
 
@@ -237,14 +281,59 @@ public static class Program
     {
         Circle(var r) => ((3.14159d * r) * r),
         Rectangle(var w, var h) => (w * h),
-        _ => throw new InvalidOperationException("Pattern match failed")
+        _ => throw new System.InvalidOperationException("Pattern match failed")
     };
 
     public static int factorial(int n) => ((n <= 1) ? 1 : (n * factorial((n - 1))));
 
-    public static Unit main() { ... }
+    public static int len<T>(SSharp.Runtime.SSharpList<T> l, int @default)
+    {
+        while (true)
+        {
+            switch (l)
+            {
+                case SSharp.Runtime.Nil<T>:
+                    {
+                        return @default;
+                    }
+                case SSharp.Runtime.Cons<T>(var head, var tail):
+                    {
+                        SSharp.Runtime.SSharpList<T> _tailrec_temp_l_0 = tail;
+                        int _tailrec_temp_default_1 = (@default + 1);
+                        l = _tailrec_temp_l_0;
+                        @default = _tailrec_temp_default_1;
+                        continue;
+                    }
+                default:
+                    throw new System.InvalidOperationException("Pattern match failed");
+            }
+        }
+    }
 
-    public static void Main(string[] args) => main();
+    public static int lenDef<T>(SSharp.Runtime.SSharpList<T> l) => len(l, 0);
+
+    public static int sum(int x, int y) => (x + y);
+
+    public static SSharp.Runtime.Unit main()
+    {
+        var c = Circle(5d);
+        var r = Rectangle(4d, 6d);
+        var l = List(1, 2, 3);
+        var add2 = new System.Func<int, int>((_p0) => sum(2, _p0));
+        println(("Circle area: " + area(c)));
+        println(("Rectangle area: " + area(r)));
+        println(("5! = " + factorial(5)));
+        println(("length of list [1, 2, 3] = " + len(l, 0)));
+        println(("length of list [1, 2, 3] = " + lenDef(l)));
+        println(("add 2 to 3= " + add2(3)));
+        var resultAdd2 = ((add2(10) == 12) ? "Yes" : "No");
+        return println(("add 2 to 10= " + resultAdd2));
+    }
+
+    public static void Main(string[] args)
+    {
+        main();
+    }
 }
 ```
 

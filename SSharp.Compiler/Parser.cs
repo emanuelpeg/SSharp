@@ -96,7 +96,26 @@ public class Parser
             Error(caseToken, "Expected 'class' or 'object' after 'case'.");
             throw new Exception("Parse error");
         }
-        if (Match(TokenType.Def)) return ParseFunDecl();
+        bool isTailRec = false;
+        if (Match(TokenType.At))
+        {
+            Token annot = Consume(TokenType.Identifier, "Expected annotation name after '@'.");
+            if (annot.Lexeme == "tailrec")
+            {
+                isTailRec = true;
+            }
+            else
+            {
+                Error(annot, $"Unknown annotation '@{annot.Lexeme}'.");
+            }
+        }
+
+        if (Match(TokenType.Def)) return ParseFunDecl(isTailRec);
+        if (isTailRec)
+        {
+            Error(Previous(), "Annotation '@tailrec' can only be applied to functions.");
+            throw new Exception("Parse error");
+        }
         if (Match(TokenType.Val)) return ParseValDecl();
 
         // Top level expression
@@ -173,7 +192,7 @@ public class Parser
         return new ClassDecl(name.Lexeme, typeParams, constructorParams, extendsType, isCase, line, col);
     }
 
-    private Decl ParseFunDecl()
+    private Decl ParseFunDecl(bool isTailRec = false)
     {
         Token name = Consume(TokenType.Identifier, "Expected function name.");
         var typeParams = new List<string>();
@@ -214,7 +233,7 @@ public class Parser
         Expr body = ParseExpression();
         Match(TokenType.Semicolon);
 
-        return new FunDecl(name.Lexeme, typeParams, @params, returnType, body, name.Line, name.Column);
+        return new FunDecl(name.Lexeme, typeParams, @params, returnType, body, name.Line, name.Column, isTailRec);
     }
 
     private Decl ParseValDecl()
@@ -234,6 +253,11 @@ public class Parser
 
     private TypeNode ParseType()
     {
+        bool isLazy = false;
+        if (Match(TokenType.Arrow) || Match(TokenType.ArrowThin))
+        {
+            isLazy = true;
+        }
         Token name = Consume(TokenType.Identifier, "Expected type name.");
         var typeArgs = new List<TypeNode>();
         if (Match(TokenType.LBracket))
@@ -244,7 +268,7 @@ public class Parser
             } while (Match(TokenType.Comma));
             Consume(TokenType.RBracket, "Expected ']' after type arguments.");
         }
-        return new TypeNode(name.Lexeme, typeArgs);
+        return new TypeNode(name.Lexeme, typeArgs, isLazy);
     }
 
     private Expr ParseExpression(Precedence precedence = Precedence.None)
@@ -471,7 +495,7 @@ public class Parser
 
         while (!Check(TokenType.RBrace) && !IsAtEnd())
         {
-            if (Check(TokenType.Val) || Check(TokenType.Def))
+            if (Check(TokenType.Val) || Check(TokenType.Def) || Check(TokenType.At))
             {
                 elements.Add(ParseDecl());
             }

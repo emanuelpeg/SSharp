@@ -10,6 +10,16 @@ public class CodeGenerator
     private readonly Dictionary<Expr, SSharpType> _resolvedTypes;
     private readonly HashSet<string> _caseObjects = new();
     private readonly Dictionary<string, ClassDecl> _classDecls = new();
+    private readonly Stack<HashSet<string>> _lazyParamsStack = new();
+
+    private bool IsLazyParam(string name)
+    {
+        foreach (var set in _lazyParamsStack)
+        {
+            if (set.Contains(name)) return true;
+        }
+        return false;
+    }
 
     public CodeGenerator(Dictionary<Expr, SSharpType> resolvedTypes)
     {
@@ -188,7 +198,26 @@ public class CodeGenerator
 
                     string parameters = string.Join(", ", fun.Params.Select(p => $"{MapTypeNode(p.Type)} {EscapeIdentifier(p.Name)}"));
                     
-                    if (fun.Body is BlockExpr block)
+                    var lazyInThisFun = new HashSet<string>(
+                        fun.Params.Where(p => p.Type.IsLazy).Select(p => p.Name)
+                    );
+                    _lazyParamsStack.Push(lazyInThisFun);
+
+                    string generatedBody;
+                    if (fun.IsTailRec)
+                    {
+                        var sb = new StringBuilder();
+                        sb.AppendLine($"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters})");
+                        sb.AppendLine($"{spaces}{{");
+                        sb.AppendLine($"{spaces}    while (true)");
+                        sb.AppendLine($"{spaces}    {{");
+                        sb.Append(GenerateTailRecBody(fun.Body, fun.Name, fun.Params, retType, indent + 8));
+                        sb.AppendLine();
+                        sb.AppendLine($"{spaces}    }}");
+                        sb.Append($"{spaces}}}");
+                        generatedBody = sb.ToString();
+                    }
+                    else if (fun.Body is BlockExpr block)
                     {
                         var sb = new StringBuilder();
                         sb.AppendLine($"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters})");
@@ -196,12 +225,15 @@ public class CodeGenerator
                         sb.Append(GenerateBlockBody(block, indent + 4, retType));
                         sb.AppendLine();
                         sb.Append($"{spaces}}}");
-                        return sb.ToString();
+                        generatedBody = sb.ToString();
                     }
                     else
                     {
-                        return $"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters}) => {GenerateExpr(fun.Body)};";
+                        generatedBody = $"{spaces}public static {retType} {EscapeIdentifier(fun.Name)}{tparams}({parameters}) => {GenerateExpr(fun.Body)};";
                     }
+
+                    _lazyParamsStack.Pop();
+                    return generatedBody;
                 }
 
             default:
@@ -235,7 +267,26 @@ public class CodeGenerator
 
                     string parameters = string.Join(", ", fun.Params.Select(p => $"{MapTypeNode(p.Type)} {p.Name}"));
                     
-                    if (fun.Body is BlockExpr block)
+                    var lazyInThisFun = new HashSet<string>(
+                        fun.Params.Where(p => p.Type.IsLazy).Select(p => p.Name)
+                    );
+                    _lazyParamsStack.Push(lazyInThisFun);
+
+                    string generatedBody;
+                    if (fun.IsTailRec)
+                    {
+                        var sb = new StringBuilder();
+                        sb.AppendLine($"{spaces}{retType} {fun.Name}({parameters})");
+                        sb.AppendLine($"{spaces}{{");
+                        sb.AppendLine($"{spaces}    while (true)");
+                        sb.AppendLine($"{spaces}    {{");
+                        sb.Append(GenerateTailRecBody(fun.Body, fun.Name, fun.Params, retType, indent + 8));
+                        sb.AppendLine();
+                        sb.AppendLine($"{spaces}    }}");
+                        sb.Append($"{spaces}}}");
+                        generatedBody = sb.ToString();
+                    }
+                    else if (fun.Body is BlockExpr block)
                     {
                         var sb = new StringBuilder();
                         sb.AppendLine($"{spaces}{retType} {fun.Name}({parameters})");
@@ -243,12 +294,15 @@ public class CodeGenerator
                         sb.Append(GenerateBlockBody(block, indent + 4, retType));
                         sb.AppendLine();
                         sb.Append($"{spaces}}}");
-                        return sb.ToString();
+                        generatedBody = sb.ToString();
                     }
                     else
                     {
-                        return $"{spaces}{retType} {fun.Name}({parameters}) => {GenerateExpr(fun.Body)};";
+                        generatedBody = $"{spaces}{retType} {fun.Name}({parameters}) => {GenerateExpr(fun.Body)};";
                     }
+
+                    _lazyParamsStack.Pop();
+                    return generatedBody;
                 }
             default:
                 return "";
@@ -326,6 +380,10 @@ public class CodeGenerator
                 return "SSharp.Runtime.Unit.Instance";
 
             case IdentifierExpr id:
+                if (IsLazyParam(id.Name))
+                {
+                    return $"{EscapeIdentifier(id.Name)}()";
+                }
                 if (id.Name == "Nil")
                 {
                     if (_resolvedTypes.TryGetValue(id, out var t) && t is GenericType gt && gt.TypeArgs.Count > 0)
@@ -368,6 +426,22 @@ public class CodeGenerator
                     {
                         int expectedCount = funType.ParamTypes.Count;
                         int actualCount = call.Arguments.Count;
+
+                        var argsList = new List<string>();
+                        for (int i = 0; i < actualCount; i++)
+                        {
+                            var arg = call.Arguments[i];
+                            if (i < expectedCount && funType.ParamTypes[i] is ByNameType bt)
+                            {
+                                string underTypeStr = MapType(bt.UnderType);
+                                argsList.Add($"new System.Func<{underTypeStr}>(() => {GenerateExpr(arg)})");
+                            }
+                            else
+                            {
+                                argsList.Add(GenerateExpr(arg));
+                            }
+                        }
+
                         if (actualCount < expectedCount)
                         {
                             var remainingTypes = funType.ParamTypes.GetRange(actualCount, expectedCount - actualCount);
@@ -378,10 +452,7 @@ public class CodeGenerator
                                 : $"System.Func<{string.Join(", ", remainingTypes.Select(MapType))}, {MapType(funType.ReturnType)}>";
 
                             var allArgs = new List<string>();
-                            for (int i = 0; i < actualCount; i++)
-                            {
-                                allArgs.Add(GenerateExpr(call.Arguments[i]));
-                            }
+                            allArgs.AddRange(argsList);
                             allArgs.AddRange(remainingNames);
 
                             string typeArgsStr = call.TypeArgs.Count > 0 
@@ -390,13 +461,18 @@ public class CodeGenerator
 
                             return $"new {delegateType}(({string.Join(", ", remainingNames)}) => {calleeStr}{typeArgsStr}({string.Join(", ", allArgs)}))";
                         }
+
+                        string typeArgsStr2 = call.TypeArgs.Count > 0 
+                            ? $"<{string.Join(", ", call.TypeArgs.Select(MapTypeNode))}>"
+                            : "";
+                        return $"{calleeStr}{typeArgsStr2}({string.Join(", ", argsList)})";
                     }
 
-                    string typeArgsStr2 = call.TypeArgs.Count > 0 
+                    string typeArgsStr3 = call.TypeArgs.Count > 0 
                         ? $"<{string.Join(", ", call.TypeArgs.Select(MapTypeNode))}>"
                         : "";
                     string argsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
-                    return $"{calleeStr}{typeArgsStr2}({argsStr})";
+                    return $"{calleeStr}{typeArgsStr3}({argsStr})";
                 }
 
             case LambdaExpr lambda:
@@ -652,6 +728,7 @@ public class CodeGenerator
             FunctionType ft => ft.ParamTypes.Count == 0 
                 ? $"System.Func<{MapType(ft.ReturnType)}>"
                 : $"System.Func<{string.Join(", ", ft.ParamTypes.Select(MapType))}, {MapType(ft.ReturnType)}>",
+            ByNameType bt => $"System.Func<{MapType(bt.UnderType)}>",
             _ => "object"
         };
     }
@@ -659,6 +736,11 @@ public class CodeGenerator
     private string MapTypeNode(TypeNode? node)
     {
         if (node == null) return "object";
+        if (node.IsLazy)
+        {
+            var nonLazy = node with { IsLazy = false };
+            return $"System.Func<{MapTypeNode(nonLazy)}>";
+        }
         return node.Name switch
         {
             "Int" => "int",
@@ -700,5 +782,143 @@ public class CodeGenerator
     private static string EscapeString(string s)
     {
         return "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t") + "\"";
+    }
+
+    private string GenerateTailRecBody(Expr expr, string funName, List<Param> funParams, string retType, int indent)
+    {
+        string spaces = new string(' ', indent);
+        switch (expr)
+        {
+            case BlockExpr block:
+                {
+                    var sb = new StringBuilder();
+                    foreach (var elem in block.Elements)
+                    {
+                        if (elem is Decl d)
+                        {
+                            sb.AppendLine(GenerateLocalDecl(d, indent));
+                        }
+                        else if (elem is Expr e)
+                        {
+                            sb.AppendLine($"{spaces}{GenerateExpr(e)};");
+                        }
+                    }
+                    if (block.FinalExpr != null)
+                    {
+                        sb.Append(GenerateTailRecBody(block.FinalExpr, funName, funParams, retType, indent));
+                    }
+                    else
+                    {
+                        sb.AppendLine($"{spaces}return SSharp.Runtime.Unit.Instance;");
+                    }
+                    return sb.ToString();
+                }
+
+            case IfExpr ifExpr:
+                {
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"{spaces}if ({GenerateExpr(ifExpr.Condition)})");
+                    sb.AppendLine($"{spaces}{{");
+                    sb.Append(GenerateTailRecBody(ifExpr.ThenBranch, funName, funParams, retType, indent + 4));
+                    sb.AppendLine();
+                    sb.AppendLine($"{spaces}}}");
+                    sb.AppendLine($"{spaces}else");
+                    sb.AppendLine($"{spaces}{{");
+                    sb.Append(GenerateTailRecBody(ifExpr.ElseBranch, funName, funParams, retType, indent + 4));
+                    sb.AppendLine();
+                    sb.Append($"{spaces}}}");
+                    return sb.ToString();
+                }
+
+            case MatchExpr matchExpr:
+                {
+                    SSharpType matchedType;
+                    if (!_resolvedTypes.TryGetValue(matchExpr.Expression, out matchedType!))
+                    {
+                        matchedType = SSharpType.Any;
+                    }
+
+                    var sb = new StringBuilder();
+                    sb.AppendLine($"{spaces}switch ({GenerateExpr(matchExpr.Expression)})");
+                    sb.AppendLine($"{spaces}{{");
+                    foreach (var c in matchExpr.Cases)
+                    {
+                        string patternStr = GeneratePattern(c.Pattern, matchedType);
+                        sb.AppendLine($"{spaces}    case {patternStr}:");
+                        sb.AppendLine($"{spaces}        {{");
+                        sb.Append(GenerateTailRecBody(c.Body, funName, funParams, retType, indent + 12));
+                        sb.AppendLine();
+                        sb.AppendLine($"{spaces}        }}");
+                    }
+                    sb.AppendLine($"{spaces}    default:");
+                    sb.AppendLine($"{spaces}        throw new System.InvalidOperationException(\"Pattern match failed\");");
+                    sb.Append($"{spaces}}}");
+                    return sb.ToString();
+                }
+
+            case CallExpr call when IsRecursiveCall(call, funName):
+                {
+                    var sb = new StringBuilder();
+                    var tempVars = new List<string>();
+                    var flatArgs = new List<Expr>();
+                    GetFlatArguments(call, flatArgs);
+
+                    int count = Math.Min(flatArgs.Count, funParams.Count);
+
+                    // 1. Evaluate arguments and store in temp variables
+                    for (int i = 0; i < count; i++)
+                    {
+                        string tempName = $"_tailrec_temp_{funParams[i].Name}_{i}";
+                        string paramType = MapTypeNode(funParams[i].Type);
+                        string argExprStr;
+                        if (funParams[i].Type.IsLazy)
+                        {
+                            string underTypeStr = MapTypeNode(funParams[i].Type with { IsLazy = false });
+                            argExprStr = $"new System.Func<{underTypeStr}>(() => {GenerateExpr(flatArgs[i])})";
+                        }
+                        else
+                        {
+                            argExprStr = GenerateExpr(flatArgs[i]);
+                        }
+                        sb.AppendLine($"{spaces}{paramType} {tempName} = {argExprStr};");
+                        tempVars.Add(tempName);
+                    }
+
+                    // 2. Assign temp variables to the actual parameters
+                    for (int i = 0; i < count; i++)
+                    {
+                        sb.AppendLine($"{spaces}{EscapeIdentifier(funParams[i].Name)} = {tempVars[i]};");
+                    }
+
+                    // 3. continue the loop
+                    sb.Append($"{spaces}continue;");
+                    return sb.ToString();
+                }
+
+            default:
+                return $"{spaces}return {GenerateExpr(expr)};";
+        }
+    }
+
+    private bool IsRecursiveCall(CallExpr call, string funName)
+    {
+        if (call.Callee is IdentifierExpr id && id.Name == funName)
+        {
+            return true;
+        }
+        if (call.Callee is CallExpr innerCall)
+        {
+            return IsRecursiveCall(innerCall, funName);
+        }
+        return false;
+    }
+
+    private void GetFlatArguments(CallExpr call, List<Expr> args)
+    {
+        if (call.Callee is CallExpr innerCall)
+        {
+            GetFlatArguments(innerCall, args);
+        }
+        args.AddRange(call.Arguments);
     }
 }

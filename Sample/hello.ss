@@ -13,14 +13,23 @@ def factorial(n: Int): Int =
     if (n <= 1) 1 else n * factorial(n - 1)
 
 
+@tailrec
 def len[T](l: List[T])(default : Int): Int = l match {
     case Nil => default
-    case head::tail => 1 + len(tail, default)
+    case head::tail => len(tail, default + 1)
 }
 
 def lenDef[T](l: List[T]): Int = len(l, 0)
 
 def sum(x: Int)(y: Int): Int = x + y
+
+def and(a: Boolean, b: => Boolean): Boolean =
+    if (a) b else false
+
+def sideEffect(): Boolean = {
+    println("Side effect executed!")
+    true
+}
 
 def main(): Unit = {
     val c = Circle(5.0)
@@ -37,4 +46,9 @@ def main(): Unit = {
     val resultAdd2 = if (add2(10) == 12) "Yes" else "No" 
     println("add 2 to 10= " + resultAdd2) 
 
+    println("Testing lazy params:")
+    val lazyRes1 = and(false, sideEffect())
+    println("lazyRes1 (should not execute side effect): " + lazyRes1)
+    val lazyRes2 = and(true, sideEffect())
+    println("lazyRes2 (should execute side effect): " + lazyRes2)
 }

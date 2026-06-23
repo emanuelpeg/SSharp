@@ -37,7 +37,9 @@ public enum TokenType
     GreaterThan,// >
     GreaterOrEqual,// >=
     Arrow,      // =>
+    ArrowThin,  // ->
     Bang,       // !
+    At,         // @
 
     // Delimiters
     LParen,     // (
