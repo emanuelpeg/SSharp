@@ -60,6 +60,14 @@ public static class Program
         var r = Rectangle(4d, 6d);
         var l = List(1, 2, 3);
         var add2 = new System.Func<int, int>((_p0) => sum(2, _p0));
+        var x = new System.Lazy<int>(() => new System.Func<int>(() =>
+{
+    println("Evaluating lazy val x!");
+    return (10 + 20);
+})());
+        println("Before accessing x");
+        println(("x = " + x.Value));
+        println(("x again = " + x.Value));
         println(("Circle area: " + area(c)));
         println(("Rectangle area: " + area(r)));
         println(("5! = " + factorial(5)));

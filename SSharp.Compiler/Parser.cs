@@ -116,7 +116,14 @@ public class Parser
             Error(Previous(), "Annotation '@tailrec' can only be applied to functions.");
             throw new Exception("Parse error");
         }
-        if (Match(TokenType.Val)) return ParseValDecl();
+        bool isLazy = false;
+        if (Match(TokenType.Lazy))
+        {
+            Consume(TokenType.Val, "Expected 'val' after 'lazy'.");
+            isLazy = true;
+        }
+        if (isLazy) return ParseValDecl(isLazy: true);
+        if (Match(TokenType.Val)) return ParseValDecl(isLazy: false);
 
         // Top level expression
         Expr expr = ParseExpression();
@@ -236,7 +243,7 @@ public class Parser
         return new FunDecl(name.Lexeme, typeParams, @params, returnType, body, name.Line, name.Column, isTailRec);
     }
 
-    private Decl ParseValDecl()
+    private Decl ParseValDecl(bool isLazy = false)
     {
         Token name = Consume(TokenType.Identifier, "Expected value name.");
         TypeNode? type = null;
@@ -248,7 +255,7 @@ public class Parser
         Expr value = ParseExpression();
         Match(TokenType.Semicolon);
 
-        return new ValDecl(name.Lexeme, type, value, name.Line, name.Column);
+        return new ValDecl(name.Lexeme, type, value, name.Line, name.Column, isLazy);
     }
 
     private TypeNode ParseType()
@@ -495,7 +502,7 @@ public class Parser
 
         while (!Check(TokenType.RBrace) && !IsAtEnd())
         {
-            if (Check(TokenType.Val) || Check(TokenType.Def) || Check(TokenType.At))
+            if (Check(TokenType.Val) || Check(TokenType.Def) || Check(TokenType.At) || Check(TokenType.Lazy))
             {
                 elements.Add(ParseDecl());
             }

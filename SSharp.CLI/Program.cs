@@ -8,17 +8,323 @@ namespace SSharp.CLI;
 
 public static class Program
 {
+    private static bool TryParseError(string kind, string errStr, out string? filePath, out int line, out int col, out string cleanMsg)
+    {
+        filePath = null;
+        line = 1;
+        col = 1;
+        cleanMsg = errStr;
+
+        // Format 1: [line:col] ...
+        if (errStr.StartsWith('['))
+        {
+            int closeBracket = errStr.IndexOf(']');
+            if (closeBracket > 0)
+            {
+                string locPart = errStr.Substring(1, closeBracket - 1);
+                int colon = locPart.IndexOf(':');
+                if (colon > 0)
+                {
+                    if (int.TryParse(locPart.Substring(0, colon), out int l) &&
+                        int.TryParse(locPart.Substring(colon + 1), out int c))
+                    {
+                        line = l;
+                        col = c;
+                        cleanMsg = errStr.Substring(closeBracket + 1).Trim();
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Format 2: filepath(line,col): error CODE: message
+        // Example: "c:\path\file.cs(12,34): error CS0103: ..."
+        int openParen = errStr.IndexOf('(');
+        int closeParen = errStr.IndexOf(')');
+        if (openParen > 0 && closeParen > openParen)
+        {
+            string locPart = errStr.Substring(openParen + 1, closeParen - openParen - 1);
+            int comma = locPart.IndexOf(',');
+            if (comma > 0)
+            {
+                if (int.TryParse(locPart.Substring(0, comma), out int l) &&
+                    int.TryParse(locPart.Substring(comma + 1), out int c))
+                {
+                    filePath = errStr.Substring(0, openParen).Trim();
+                    line = l;
+                    col = c;
+                    cleanMsg = errStr.Substring(closeParen + 1).Trim();
+                    if (cleanMsg.StartsWith(':')) cleanMsg = cleanMsg.Substring(1).Trim();
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static string? GetSuggestion(string kind, string message)
+    {
+        string msgLower = message.ToLowerInvariant();
+
+        if (kind == "lexer")
+        {
+            if (msgLower.Contains("unexpected character"))
+            {
+                return "Remove this character or check if it is a typo.";
+            }
+            if (msgLower.Contains("unterminated string"))
+            {
+                return "Add a closing double quote '\"' at the end of the string literal.";
+            }
+        }
+        else if (kind == "parser")
+        {
+            if (msgLower.Contains("expected 'trait' or 'class' after 'sealed'"))
+            {
+                return "Did you mean 'sealed trait' or 'sealed class'? Only traits and classes can be sealed.";
+            }
+            if (msgLower.Contains("expected 'class' or 'object' after 'case'"))
+            {
+                return "Did you mean 'case class' or 'case object'?";
+            }
+            if (msgLower.Contains("unknown annotation"))
+            {
+                return "SSharp only supports '@tailrec' annotation. Check for spelling errors.";
+            }
+            if (msgLower.Contains("annotation '@tailrec' can only be applied to functions"))
+            {
+                return "Remove '@tailrec' or place it directly before a function definition ('def').";
+            }
+            if (msgLower.Contains("expected string literal after 'import'"))
+            {
+                return "Ensure the import path is enclosed in double quotes, e.g., import \"SSharp.Runtime\";";
+            }
+            if (msgLower.Contains("expected trait name") || msgLower.Contains("expected class name") || msgLower.Contains("expected function name") || msgLower.Contains("expected value name"))
+            {
+                return "Provide a valid identifier name starting with a letter.";
+            }
+            if (msgLower.Contains("expected type parameter name"))
+            {
+                return "Provide a valid type identifier (e.g. A, T).";
+            }
+            if (msgLower.Contains("expected ']'"))
+            {
+                return "Add a closing bracket ']' to close the generic parameter/argument list.";
+            }
+            if (msgLower.Contains("expected ':' after parameter name"))
+            {
+                return "Add a colon ':' followed by the parameter type, e.g., (x: Int).";
+            }
+            if (msgLower.Contains("expected ')'"))
+            {
+                return "Add a closing parenthesis ')'.";
+            }
+            if (msgLower.Contains("expected '=' before function body"))
+            {
+                return "Add '=' before the function body, e.g., def myFunc() = ...";
+            }
+            if (msgLower.Contains("expected '=' after value name"))
+            {
+                return "Add '=' followed by the initial value expression, e.g., val x = 10;";
+            }
+            if (msgLower.Contains("expected type name"))
+            {
+                return "Provide a valid type identifier (e.g. Int, Double, String, Boolean, Unit, Any).";
+            }
+            if (msgLower.Contains("expected '=>'"))
+            {
+                return "Use the arrow operator '=>' here.";
+            }
+            if (msgLower.Contains("expected '{' after match"))
+            {
+                return "Add an opening brace '{' to start the match expression block.";
+            }
+            if (msgLower.Contains("expected '}'"))
+            {
+                return "Add a closing brace '}' to close the block or match expression.";
+            }
+            if (msgLower.Contains("expected 'case'"))
+            {
+                return "Write a match case starting with 'case', e.g. case Nil => 0";
+            }
+            if (msgLower.Contains("expected pattern"))
+            {
+                return "Write a valid pattern (e.g., wildcard '_', a literal, an identifier, or a constructor pattern).";
+            }
+            if (msgLower.Contains("expected '(' after 'if'"))
+            {
+                return "Enclose the 'if' condition in parentheses, e.g., if (condition) ...";
+            }
+            if (msgLower.Contains("expected 'else'"))
+            {
+                return "All 'if' expressions in SSharp must have an 'else' branch. Add 'else <expression>'.";
+            }
+        }
+        else if (kind == "type")
+        {
+            if (msgLower.Contains("type mismatch: val") || msgLower.Contains("type mismatch in function"))
+            {
+                return "Ensure the expression type matches the declared type. You may need to change the declared type or convert the expression.";
+            }
+            if (msgLower.Contains("could not optimize @tailrec"))
+            {
+                return "Ensure the function calls itself recursively in tail position, or remove '@tailrec'.";
+            }
+            if (msgLower.Contains("not found in current scope"))
+            {
+                return "Declare the identifier, check its spelling, or check its scope and imports.";
+            }
+            if (msgLower.Contains("cannot be applied to types") || msgLower.Contains("cannot be applied to type"))
+            {
+                return "Check the types of the operands. You might need to cast or convert one of them (e.g. using .toDouble()).";
+            }
+            if (msgLower.Contains("if condition must be boolean"))
+            {
+                return "Change the condition expression to evaluate to a Boolean value.";
+            }
+            if (msgLower.Contains("expected") && msgLower.Contains("arguments, but got"))
+            {
+                return "Check the function signature and pass the correct number of arguments.";
+            }
+            if (msgLower.Contains("type mismatch") && msgLower.Contains("argument"))
+            {
+                return "Pass an argument of the correct type, or adjust the parameter type.";
+            }
+            if (msgLower.Contains("is not callable"))
+            {
+                return "Make sure you are calling a function, constructor, or valid callable object.";
+            }
+            if (msgLower.Contains("not in tail position"))
+            {
+                return "Rewrite the function so that the recursive call is the final operation (e.g., return it directly without further operations like addition/multiplication).";
+            }
+        }
+        else if (kind == "compile")
+        {
+            if (msgLower.Contains("does not exist in the current context") || msgLower.Contains("could not be found"))
+            {
+                return "Check if a reference or using directive is missing, or check the spelling.";
+            }
+        }
+
+        return null;
+    }
+
     // Helper to display errors in a Rust-like style
     private static void PrintError(string kind, string message, string file, int? line = null, int? col = null)
     {
-        // Format: error[kind]: message
-        //   --> file:line:col
-        if (line.HasValue && col.HasValue)
-            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}:{line}:{col}");
-        else if (line.HasValue)
-            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}:{line}");
-        else
-            Console.Error.WriteLine($"error[{kind}]: {message}\n   --> {file}");
+        int l = line ?? 1;
+        int c = col ?? 1;
+        string cleanMsg = message;
+
+        if (!line.HasValue || !col.HasValue)
+        {
+            TryParseError(kind, message, out string? filePath, out l, out c, out cleanMsg);
+            if (filePath != null && File.Exists(filePath))
+            {
+                file = filePath;
+            }
+        }
+
+        if (cleanMsg.StartsWith("Type Error: ")) cleanMsg = cleanMsg.Substring("Type Error: ".Length);
+        if (cleanMsg.StartsWith("Error at end: ")) cleanMsg = cleanMsg.Substring("Error at end: ".Length);
+
+        Console.Error.WriteLine($"error[{kind}]: {cleanMsg}");
+        Console.Error.WriteLine($"  --> {file}:{l}:{c}");
+
+        try
+        {
+            if (File.Exists(file))
+            {
+                string[] sourceLines = File.ReadAllLines(file);
+                if (l >= 1 && l <= sourceLines.Length)
+                {
+                    string rawLine = sourceLines[l - 1];
+                    var visualLine = new System.Text.StringBuilder();
+                    var caretLine = new System.Text.StringBuilder();
+                    for (int i = 0; i < rawLine.Length; i++)
+                    {
+                        char ch = rawLine[i];
+                        if (ch == '\t')
+                        {
+                            visualLine.Append("    ");
+                            if (i < c - 1)
+                            {
+                                caretLine.Append("    ");
+                            }
+                        }
+                        else
+                        {
+                            visualLine.Append(ch);
+                            if (i < c - 1)
+                            {
+                                caretLine.Append(' ');
+                            }
+                        }
+                    }
+
+                    int caretWidth = 1;
+                    int lexemeIndex = cleanMsg.IndexOf("Error at '");
+                    if (lexemeIndex >= 0)
+                    {
+                        int endQuote = cleanMsg.IndexOf("':", lexemeIndex + 10);
+                        if (endQuote > 0)
+                        {
+                            string lexeme = cleanMsg.Substring(lexemeIndex + 10, endQuote - (lexemeIndex + 10));
+                            caretWidth = Math.Max(1, lexeme.Length);
+                        }
+                    }
+
+                    if (caretWidth == 1 && c - 1 >= 0 && c - 1 < rawLine.Length)
+                    {
+                        char startChar = rawLine[c - 1];
+                        if (char.IsLetterOrDigit(startChar) || startChar == '_')
+                        {
+                            int len = 0;
+                            while (c - 1 + len < rawLine.Length)
+                            {
+                                char ch = rawLine[c - 1 + len];
+                                if (char.IsLetterOrDigit(ch) || ch == '_')
+                                {
+                                    len++;
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            }
+                            caretWidth = Math.Max(1, len);
+                        }
+                    }
+
+                    for (int i = 0; i < caretWidth; i++)
+                    {
+                        caretLine.Append('^');
+                    }
+
+                    string lineNumStr = l.ToString();
+                    string padding = new string(' ', lineNumStr.Length);
+                    Console.Error.WriteLine($" {padding} |");
+                    Console.Error.WriteLine($" {lineNumStr} | {visualLine}");
+                    Console.Error.WriteLine($" {padding} | {caretLine}");
+                }
+            }
+        }
+        catch
+        {
+            // Ignore preview printing issues and fallback gracefully
+        }
+
+        string? suggestion = GetSuggestion(kind, cleanMsg);
+        if (suggestion != null)
+        {
+            string lineNumStr = l.ToString();
+            string padding = new string(' ', lineNumStr.Length);
+            Console.Error.WriteLine($" {padding} |");
+            Console.Error.WriteLine($" {padding} = help: {suggestion}");
+        }
+        Console.Error.WriteLine();
     }
     // Existing PrintUsage method follows
     private static void PrintUsage()
@@ -115,7 +421,7 @@ public static class Program
             {
                 Console.Error.WriteLine("Lexer errors:");
                 foreach (var err in lexerErrors)
-                    PrintError("lexer", $"[{err.Line}:{err.Column}] {err.Value}", inputFile, err.Line, err.Column);
+                    PrintError("lexer", $"[{err.Line}:{err.Column}] {err.Lexeme}", inputFile, err.Line, err.Column);
                 return 1;
             }
 

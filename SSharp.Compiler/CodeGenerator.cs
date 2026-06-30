@@ -21,6 +21,33 @@ public class CodeGenerator
         return false;
     }
 
+    private readonly Stack<HashSet<string>> _lazyVarsStack = new();
+
+    private bool IsLocalLazyVal(string name)
+    {
+        foreach (var set in _lazyVarsStack)
+        {
+            if (set.Contains(name)) return true;
+        }
+        return false;
+    }
+
+    private string GetValTypeStr(ValDecl val)
+    {
+        if (val.Type != null)
+        {
+            return MapTypeNode(val.Type);
+        }
+        else if (_resolvedTypes.TryGetValue(val.Value, out var t))
+        {
+            return MapType(t);
+        }
+        else
+        {
+            return "object";
+        }
+    }
+
     public CodeGenerator(Dictionary<Expr, SSharpType> resolvedTypes)
     {
         _resolvedTypes = resolvedTypes;
@@ -155,27 +182,32 @@ public class CodeGenerator
 
             case ValDecl val:
                 {
-                    string typeStr;
-                    if (val.Type != null)
-                    {
-                        typeStr = MapTypeNode(val.Type);
-                    }
-                    else if (_resolvedTypes.TryGetValue(val.Value, out var t))
-                    {
-                        typeStr = MapType(t);
-                    }
-                    else
-                    {
-                        typeStr = "object";
-                    }
+                    string typeStr = GetValTypeStr(val);
 
-                    if (indent == 4)
+                    if (val.IsLazy)
                     {
-                        return $"{spaces}public static readonly {typeStr} {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
+                        if (indent == 4)
+                        {
+                            var sb = new StringBuilder();
+                            sb.AppendLine($"{spaces}private static readonly System.Lazy<{typeStr}> _lazy_field_{EscapeIdentifier(val.Name)} = new System.Lazy<{typeStr}>(() => {GenerateExpr(val.Value)});");
+                            sb.Append($"{spaces}public static {typeStr} {EscapeIdentifier(val.Name)} => _lazy_field_{EscapeIdentifier(val.Name)}.Value;");
+                            return sb.ToString();
+                        }
+                        else
+                        {
+                            return $"{spaces}var {EscapeIdentifier(val.Name)} = new System.Lazy<{typeStr}>(() => {GenerateExpr(val.Value)});";
+                        }
                     }
                     else
                     {
-                        return $"{spaces}var {val.Name} = {GenerateExpr(val.Value)};";
+                        if (indent == 4)
+                        {
+                            return $"{spaces}public static readonly {typeStr} {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
+                        }
+                        else
+                        {
+                            return $"{spaces}var {val.Name} = {GenerateExpr(val.Value)};";
+                        }
                     }
                 }
 
@@ -202,6 +234,19 @@ public class CodeGenerator
                         fun.Params.Where(p => p.Type.IsLazy).Select(p => p.Name)
                     );
                     _lazyParamsStack.Push(lazyInThisFun);
+
+                    var localLazyVars = new HashSet<string>();
+                    if (fun.Body is BlockExpr funBlock)
+                    {
+                        foreach (var elem in funBlock.Elements)
+                        {
+                            if (elem is ValDecl val && val.IsLazy)
+                            {
+                                localLazyVars.Add(val.Name);
+                            }
+                        }
+                    }
+                    _lazyVarsStack.Push(localLazyVars);
 
                     string generatedBody;
                     if (fun.IsTailRec)
@@ -233,6 +278,7 @@ public class CodeGenerator
                     }
 
                     _lazyParamsStack.Pop();
+                    _lazyVarsStack.Pop();
                     return generatedBody;
                 }
 
@@ -247,7 +293,17 @@ public class CodeGenerator
         switch (decl)
         {
             case ValDecl val:
-                return $"{spaces}var {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
+                {
+                    string typeStr = GetValTypeStr(val);
+                    if (val.IsLazy)
+                    {
+                        return $"{spaces}var {EscapeIdentifier(val.Name)} = new System.Lazy<{typeStr}>(() => {GenerateExpr(val.Value)});";
+                    }
+                    else
+                    {
+                        return $"{spaces}var {EscapeIdentifier(val.Name)} = {GenerateExpr(val.Value)};";
+                    }
+                }
 
             case FunDecl fun:
                 {
@@ -271,6 +327,19 @@ public class CodeGenerator
                         fun.Params.Where(p => p.Type.IsLazy).Select(p => p.Name)
                     );
                     _lazyParamsStack.Push(lazyInThisFun);
+
+                    var localLazyVars = new HashSet<string>();
+                    if (fun.Body is BlockExpr funBlock)
+                    {
+                        foreach (var elem in funBlock.Elements)
+                        {
+                            if (elem is ValDecl val && val.IsLazy)
+                            {
+                                localLazyVars.Add(val.Name);
+                            }
+                        }
+                    }
+                    _lazyVarsStack.Push(localLazyVars);
 
                     string generatedBody;
                     if (fun.IsTailRec)
@@ -302,6 +371,7 @@ public class CodeGenerator
                     }
 
                     _lazyParamsStack.Pop();
+                    _lazyVarsStack.Pop();
                     return generatedBody;
                 }
             default:
@@ -350,12 +420,24 @@ public class CodeGenerator
             retType = "SSharp.Runtime.Unit";
         }
 
+        var localLazyVars = new HashSet<string>();
+        foreach (var elem in block.Elements)
+        {
+            if (elem is ValDecl val && val.IsLazy)
+            {
+                localLazyVars.Add(val.Name);
+            }
+        }
+        _lazyVarsStack.Push(localLazyVars);
+
         var sb = new StringBuilder();
         sb.AppendLine($"new System.Func<{retType}>(() =>");
         sb.AppendLine("{");
         sb.Append(GenerateBlockBody(block, 4, retType));
         sb.AppendLine();
         sb.Append("})()");
+
+        _lazyVarsStack.Pop();
         return sb.ToString();
     }
 
@@ -383,6 +465,10 @@ public class CodeGenerator
                 if (IsLazyParam(id.Name))
                 {
                     return $"{EscapeIdentifier(id.Name)}()";
+                }
+                if (IsLocalLazyVal(id.Name))
+                {
+                    return $"{EscapeIdentifier(id.Name)}.Value";
                 }
                 if (id.Name == "Nil")
                 {

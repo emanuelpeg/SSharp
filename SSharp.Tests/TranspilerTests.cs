@@ -251,4 +251,24 @@ public class TranspilerTests
         Assert.Contains("and(true, new System.Func<bool>(() => true))", output);
         Assert.Contains("andThin(false, new System.Func<bool>(() => true))", output);
     }
+
+    [Fact]
+    public void TestLazyValModifier()
+    {
+        string source = @"
+            lazy val x: Int = 10 + 20;
+
+            def getLazy(): Int = {
+                lazy val y = x * 2;
+                y + 5
+            };
+        ";
+        string output = Transpile(source);
+
+        Assert.Contains("private static readonly System.Lazy<int> _lazy_field_x = new System.Lazy<int>(() => (10 + 20));", output);
+        Assert.Contains("public static int x => _lazy_field_x.Value;", output);
+
+        Assert.Contains("var y = new System.Lazy<int>(() => (x * 2));", output);
+        Assert.Contains("return (y.Value + 5);", output);
+    }
 }

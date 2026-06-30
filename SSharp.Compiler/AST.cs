@@ -19,7 +19,7 @@ public record ImportDecl(string Path) : Decl;
 
 public record ExprDecl(Expr Expression) : Decl;
 
-public record ValDecl(string Name, TypeNode? Type, Expr Value, int Line, int Column) : Decl;
+public record ValDecl(string Name, TypeNode? Type, Expr Value, int Line, int Column, bool IsLazy = false) : Decl;
 
 public record Param(string Name, TypeNode Type, int Line, int Column);
 

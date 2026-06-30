@@ -14,6 +14,7 @@ public class Lexer
     private static readonly Dictionary<string, TokenType> Keywords = new()
     {
         { "val", TokenType.Val },
+        { "lazy", TokenType.Lazy },
         { "def", TokenType.Def },
         { "if", TokenType.If },
         { "else", TokenType.Else },
@@ -158,7 +159,7 @@ public class Lexer
     private Token MakeToken(TokenType type, object? value = null, string? lexeme = null)
     {
         string text = lexeme ?? _source[_start.._current];
-        int col = _column - text.Length;
+        int col = _column - (_current - _start);
         if (col < 1) col = 1;
         return new Token(type, text, value, _line, col);
     }

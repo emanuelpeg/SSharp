@@ -10,6 +10,7 @@ public enum TokenType
 
     // Keywords
     Val,
+    Lazy,
     Def,
     If,
     Else,
