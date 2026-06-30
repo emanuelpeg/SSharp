@@ -97,11 +97,16 @@ dotnet run --project SSharp.CLI -- hello.ss -r
 
 ### Compiler Diagnostics
 
-SSharp features Rust-like diagnostic error reporting to make debugging compilation issues straightforward, indicating the error category and targeting the exact file, line, and column:
+SSharp features Rust-like diagnostic error reporting to make debugging compilation issues straightforward, indicating the error category, targeting the exact file, line, and column, displaying a code preview with carets, and offering helpful fix suggestions:
 
 ```text
-error[type]: Argument 1 type mismatch: expected Double, but got Int
-   --> hello.ss:20:25
+error[type]: Type mismatch: Val 'x' expected Int, but got String.
+  --> Sample\error_test.ss:1:15
+   |
+ 1 | val x: Int = "hello";
+   |               ^^^^^^^
+   |
+   = help: Ensure the expression type matches the declared type. You may need to change the declared type or convert the expression.
 ```
 
 ---
@@ -113,6 +118,21 @@ error[type]: Argument 1 type mismatch: expected Double, but got Int
 ```scala
 val x: Int = 42
 val message = "Hello, World!"
+```
+
+### Lazy Values
+
+Lazy values are declared with the `lazy val` modifier. They are evaluated only when first accessed, and their result is cached (memoized) for subsequent reads:
+
+```scala
+lazy val x: Int = {
+    println("Evaluating x!")
+    10 + 20
+}
+
+println("Before accessing x")
+println(x) // Prints "Evaluating x!" then "30"
+println(x) // Prints only "30" (value is cached)
 ```
 
 ### Functions
