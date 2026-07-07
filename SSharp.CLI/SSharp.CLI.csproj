@@ -1,9 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\SSharp.Compiler\SSharp.Compiler.csproj" />
     <ProjectReference Include="..\SSharp.Runtime\SSharp.Runtime.csproj" />
     <ProjectReference Include="..\SSharp.Backend\SSharp.Backend.csproj" />
+    <ProjectReference Include="..\SSharp.Repl\SSharp.Repl.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

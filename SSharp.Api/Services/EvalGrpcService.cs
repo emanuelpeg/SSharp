@@ -1,0 +1,81 @@
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Grpc.Core;
+using SSharp.Backend;
+using SSharp.Compiler;
+
+namespace SSharp.Api.Services;
+
+/// <summary>gRPC implementation of the stateless SSharp eval service.</summary>
+public class EvalGrpcService : EvalService.EvalServiceBase
+{
+    private readonly EvalBackend _backend = new();
+
+    public override Task<EvalResponse> Eval(EvalRequest request, ServerCallContext context)
+    {
+        var result = EvalCore(request.Code);
+        return Task.FromResult(result);
+    }
+
+    internal static EvalResponse EvalCore(string code)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            return new EvalResponse { Success = false, Errors = { "Code cannot be empty." } };
+        }
+
+        // ── Lex ──────────────────────────────────────────────────────────────
+        var lexer  = new Lexer(code);
+        var tokens = lexer.ScanTokens();
+
+        var lexErrors = tokens.Where(t => t.Type == TokenType.Error).ToList();
+        if (lexErrors.Any())
+        {
+            var resp = new EvalResponse { Success = false };
+            foreach (var e in lexErrors)
+                resp.Errors.Add($"[{e.Line}:{e.Column}] {e.Lexeme}");
+            return resp;
+        }
+
+        // ── Parse ─────────────────────────────────────────────────────────────
+        var parser = new Parser(tokens);
+        var ast    = parser.ParseProgram();
+
+        if (parser.Errors.Any())
+        {
+            var resp = new EvalResponse { Success = false };
+            foreach (var e in parser.Errors) resp.Errors.Add(e);
+            return resp;
+        }
+
+        // ── Type Check ────────────────────────────────────────────────────────
+        var typeChecker = new TypeChecker();
+        typeChecker.Check(ast);
+
+        if (typeChecker.Errors.Any())
+        {
+            var resp = new EvalResponse { Success = false };
+            foreach (var e in typeChecker.Errors) resp.Errors.Add(e);
+            return resp;
+        }
+
+        // ── Code Gen ──────────────────────────────────────────────────────────
+        var codeGen    = new CodeGenerator(typeChecker.ResolvedTypes);
+        string genCode = codeGen.Generate(ast);
+
+        // ── Eval ──────────────────────────────────────────────────────────────
+        var backend    = new EvalBackend();
+        var evalResult = backend.Eval(genCode);
+
+        var response = new EvalResponse
+        {
+            Success   = evalResult.Success,
+            Output    = evalResult.Output,
+            ElapsedMs = evalResult.ElapsedMs,
+            TypeInfo  = evalResult.TypeInfo ?? string.Empty,
+        };
+        foreach (var e in evalResult.Errors) response.Errors.Add(e);
+        return response;
+    }
+}

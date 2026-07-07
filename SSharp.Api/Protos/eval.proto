@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option csharp_namespace = "SSharp.Api";
+
+package ssharp;
+
+service EvalService {
+  rpc Eval (EvalRequest) returns (EvalResponse);
+}
+
+message EvalRequest {
+  string code = 1;
+}
+
+message EvalResponse {
+  bool   success    = 1;
+  string output     = 2;
+  repeated string errors = 3;
+  int64  elapsed_ms = 4;
+  string type_info  = 5;
+}

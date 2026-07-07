@@ -1,8 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Text;
 using SSharp.Backend;
 using SSharp.Compiler;
+using SSharp.Repl;
 
 namespace SSharp.CLI;
 
@@ -330,6 +332,7 @@ public static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage: SSharp.CLI <input-file.ss> [options]");
+        Console.WriteLine("       SSharp.CLI repl");
         Console.WriteLine();
         Console.WriteLine("Options:");
         Console.WriteLine("  -o <output-file>     Output path for the generated .cs file");
@@ -341,6 +344,180 @@ public static class Program
         Console.WriteLine("                       (only used with -c / --compile or -r / --run)");
         Console.WriteLine("  --runtime-dll <path> Explicit path to SSharp.Runtime.dll");
         Console.WriteLine("                       (only used with -c / --compile or -r / --run)");
+        Console.WriteLine();
+        Console.WriteLine("REPL mode:");
+        Console.WriteLine("  repl                 Start an interactive REPL session");
+    }
+
+    // ── REPL ─────────────────────────────────────────────────────────────────
+
+    private static int RunRepl()
+    {
+        const string version = "0.1.0";
+        const string prompt  = "ssharp> ";
+        const string contPrompt = "      | ";
+
+        PrintReplBanner(version);
+
+        var session = new ReplSession();
+
+        while (true)
+        {
+            // ── Read input (possibly multi-line) ─────────────────────────────
+            Console.Write(prompt);
+            string? line = Console.ReadLine();
+
+            if (line == null) break; // EOF (Ctrl+Z / Ctrl+D)
+
+            string trimmedLine = line.Trim();
+
+            // Special REPL commands
+            if (trimmedLine.StartsWith(":"))
+            {
+                HandleReplCommand(trimmedLine, session);
+                continue;
+            }
+
+            // Collect multi-line blocks: keep reading while braces are unbalanced
+            var inputBuilder = new StringBuilder(line);
+            int depth = CountBraceDepth(line);
+
+            while (depth > 0)
+            {
+                Console.Write(contPrompt);
+                string? cont = Console.ReadLine();
+                if (cont == null) break;
+                inputBuilder.AppendLine();
+                inputBuilder.Append(cont);
+                depth += CountBraceDepth(cont);
+            }
+
+            string input = inputBuilder.ToString().Trim();
+            if (string.IsNullOrWhiteSpace(input)) continue;
+
+            // ── Submit to session ────────────────────────────────────────────
+            var result = session.Submit(input);
+
+            if (!result.IsSuccess)
+            {
+                foreach (var err in result.Errors)
+                    PrintReplError(err);
+            }
+            else
+            {
+                // Print captured stdout (if any)
+                if (!string.IsNullOrEmpty(result.Output))
+                    Console.WriteLine(result.Output);
+
+                // Print type annotation: `name: Type = <value>` or `name: Type`
+                if (result.TypeInfo != null && result.BindingName != null)
+                {
+                    string display = BuildReplDisplay(result.BindingName, result.TypeInfo, result.Output);
+                    Console.ForegroundColor = ConsoleColor.DarkCyan;
+                    Console.WriteLine(display);
+                    Console.ResetColor();
+                }
+            }
+        }
+
+        Console.WriteLine("Goodbye.");
+        return 0;
+    }
+
+    private static string BuildReplDisplay(string name, string typeInfo, string output)
+    {
+        // If the captured output already contains the value (e.g. from println),
+        // just show the type without repeating the value.
+        if (!string.IsNullOrEmpty(output))
+            return $"{name}: {typeInfo}";
+
+        return $"{name}: {typeInfo}";
+    }
+
+    private static void HandleReplCommand(string cmd, ReplSession session)
+    {
+        switch (cmd)
+        {
+            case ":quit":
+            case ":q":
+                Console.WriteLine("Goodbye.");
+                Environment.Exit(0);
+                break;
+
+            case ":reset":
+                session.Reset();
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("Session reset.");
+                Console.ResetColor();
+                break;
+
+            case ":ctx":
+            case ":context":
+                string ctx = session.Context;
+                if (string.IsNullOrWhiteSpace(ctx))
+                {
+                    Console.WriteLine("(empty context)");
+                }
+                else
+                {
+                    Console.ForegroundColor = ConsoleColor.DarkGray;
+                    Console.WriteLine(ctx);
+                    Console.ResetColor();
+                }
+                break;
+
+            case ":help":
+            case ":h":
+                PrintReplHelp();
+                break;
+
+            default:
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Unknown command: {cmd}. Type :help for a list of commands.");
+                Console.ResetColor();
+                break;
+        }
+    }
+
+    private static int CountBraceDepth(string line)
+    {
+        int depth = 0;
+        foreach (char c in line)
+        {
+            if (c == '{') depth++;
+            else if (c == '}') depth--;
+        }
+        return depth;
+    }
+
+    private static void PrintReplBanner(string version)
+    {
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"SSharp REPL v{version}  (.NET {Environment.Version})");
+        Console.ResetColor();
+        Console.WriteLine("Type :help for available commands, :quit to exit.");
+        Console.WriteLine();
+    }
+
+    private static void PrintReplHelp()
+    {
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine("REPL commands:");
+        Console.ResetColor();
+        Console.WriteLine("  :help  :h         Show this help message");
+        Console.WriteLine("  :quit  :q         Exit the REPL");
+        Console.WriteLine("  :reset            Clear the accumulated context");
+        Console.WriteLine("  :ctx   :context   Show the accumulated context");
+        Console.WriteLine();
+        Console.WriteLine("Multi-line input:");
+        Console.WriteLine("  Open a '{' to enter multi-line mode. Input is submitted when all braces are closed.");
+    }
+
+    private static void PrintReplError(string err)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.Error.WriteLine($"error: {err}");
+        Console.ResetColor();
     }
 
 
@@ -352,6 +529,10 @@ public static class Program
             PrintUsage();
             return args.Length < 1 ? 1 : 0;
         }
+
+        // ── REPL mode ────────────────────────────────────────────────────────
+        if (args[0] is "repl")
+            return RunRepl();
 
         string inputFile    = args[0];
         string outputCs     = "";
