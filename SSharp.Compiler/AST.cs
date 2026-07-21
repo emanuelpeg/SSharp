@@ -52,6 +52,14 @@ public record LambdaExpr(List<Param> Params, Expr Body, int Line, int Column) : 
 
 public record MatchExpr(Expr Expression, List<MatchCase> Cases, int Line, int Column) : Expr;
 
+/// <summary>
+/// Represents dot-notation member access: receiver.Member or receiver.Method(args).
+/// If Arguments is null, it is a property access (zero-arg call).
+/// If Arguments is non-null, it is a method call with those arguments.
+/// </summary>
+public record MemberAccessExpr(Expr Receiver, string Member, List<TypeNode> TypeArgs, List<Expr>? Arguments, int Line, int Column) : Expr;
+
+
 // Patterns and Match Cases
 public record MatchCase(Pattern Pattern, Expr Body, int Line, int Column);
 

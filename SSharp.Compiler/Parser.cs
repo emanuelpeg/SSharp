@@ -371,6 +371,9 @@ public class Parser
             case TokenType.Match:
                 return ParseMatchExpr(left, op);
 
+            case TokenType.Dot:
+                return ParseMemberAccessExpr(left, op);
+
             default:
                 throw new Exception($"Unimplemented infix operator: {op.Type}");
         }
@@ -410,6 +413,41 @@ public class Parser
         }
         Consume(TokenType.RParen, "Expected ')' after call arguments.");
         return new CallExpr(callee, args, typeArgs, lBracket.Line, lBracket.Column);
+    }
+
+    private Expr ParseMemberAccessExpr(Expr receiver, Token dotToken)
+    {
+        Token memberToken = Consume(TokenType.Identifier, "Expected member name after '.'.");
+        string member = memberToken.Lexeme;
+
+        // Check for generic type args: obj.method[T](args)
+        var typeArgs = new List<TypeNode>();
+        if (Match(TokenType.LBracket))
+        {
+            do
+            {
+                typeArgs.Add(ParseType());
+            } while (Match(TokenType.Comma));
+            Consume(TokenType.RBracket, "Expected ']' after generic type arguments.");
+        }
+
+        // Check if it is a method call (args) or property access
+        if (Match(TokenType.LParen))
+        {
+            var callArgs = new List<Expr>();
+            if (!Check(TokenType.RParen))
+            {
+                do
+                {
+                    callArgs.Add(ParseExpression());
+                } while (Match(TokenType.Comma));
+            }
+            Consume(TokenType.RParen, "Expected ')' after method arguments.");
+            return new MemberAccessExpr(receiver, member, typeArgs, callArgs, dotToken.Line, dotToken.Column);
+        }
+
+        // Property access (no parentheses) — treated as zero-arg method call
+        return new MemberAccessExpr(receiver, member, typeArgs, null, dotToken.Line, dotToken.Column);
     }
 
     private Expr ParseMatchExpr(Expr expression, Token matchToken)
@@ -585,7 +623,7 @@ public class Parser
             TokenType.LessThan or TokenType.LessOrEqual or TokenType.GreaterThan or TokenType.GreaterOrEqual => Precedence.Comparison,
             TokenType.Plus or TokenType.Minus => Precedence.Term,
             TokenType.Asterisk or TokenType.Slash or TokenType.Percent => Precedence.Factor,
-            TokenType.LParen or TokenType.LBracket => Precedence.Call,
+            TokenType.LParen or TokenType.LBracket or TokenType.Dot => Precedence.Call,
             _ => Precedence.None
         };
     }

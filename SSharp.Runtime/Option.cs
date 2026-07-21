@@ -25,6 +25,24 @@ public abstract record SSharpOption<T>
         }
         return new None<T>();
     }
+
+    public SSharpOption<U> FlatMap<U>(Func<T, SSharpOption<U>> f)
+    {
+        if (this is Some<T> some)
+        {
+            return f(some.Value);
+        }
+        return new None<U>();
+    }
+
+    public SSharpOption<U> Flatten<U>()
+    {
+        if (this is Some<T> some && some.Value is SSharpOption<U> inner)
+        {
+            return inner;
+        }
+        return new None<U>();
+    }
 }
 
 public record None<T> : SSharpOption<T>

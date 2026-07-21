@@ -21,6 +21,8 @@ public static class Predef
         return Console.ReadLine() ?? "";
     }
 
+    // ── List factory ─────────────────────────────────────────────────────────
+
     public static SSharpList<T> List<T>(params T[] items)
     {
         SSharpList<T> list = new Nil<T>();
@@ -30,4 +32,26 @@ public static class Predef
         }
         return list;
     }
+
+    // ── Set factory ──────────────────────────────────────────────────────────
+
+    /// <summary>Creates an immutable Set from the given elements.</summary>
+    public static SSharpSet<T> Set<T>(params T[] items) => new SSharpSet<T>(items);
+
+    // ── Map factory ──────────────────────────────────────────────────────────
+
+    /// <summary>Creates an immutable Map from the given key-value Tuple2 pairs.</summary>
+    public static SSharpMap<K, V> Map<K, V>(params SSharpTuple2<K, V>[] entries) =>
+        new SSharpMap<K, V>(entries);
+
+    // ── Tuple2 factory ───────────────────────────────────────────────────────
+
+    /// <summary>Creates a Tuple2 pair. Used as map entries: Tuple2("key", value).</summary>
+    public static SSharpTuple2<A, B> Tuple2<A, B>(A a, B b) => new SSharpTuple2<A, B>(a, b);
+
+    // ── Option factory ───────────────────────────────────────────────────────
+
+    /// <summary>Creates an Option from the given value (Some if not null, None otherwise).</summary>
+    public static SSharpOption<T> Option<T>(T value) =>
+        value == null ? new None<T>() : new Some<T>(value);
 }

@@ -508,6 +508,62 @@ public class CodeGenerator
                 {
                     string calleeStr = GenerateExpr(call.Callee);
 
+                    // Handle SetFactory: Set(1, 2, 3) => Set<T>(1, 2, 3)
+                    if (call.Callee is IdentifierExpr setId && setId.Name == "Set")
+                    {
+                        string setArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string elemType = "object";
+                        if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var elemT))
+                        {
+                            elemType = MapType(elemT);
+                        }
+                        return $"Set<{elemType}>({setArgsStr})";
+                    }
+
+                    // Handle MapFactory: Map(Tuple2(k,v), ...) => Map<K,V>(Tuple2(k,v), ...)
+                    if (call.Callee is IdentifierExpr mapId && mapId.Name == "Map")
+                    {
+                        string mapArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string keyType = "object";
+                        string valType = "object";
+                        if (call.Arguments.Count > 0 && call.Arguments[0] is CallExpr tupleCall &&
+                            tupleCall.Callee is IdentifierExpr tupleId && tupleId.Name == "Tuple2" &&
+                            tupleCall.Arguments.Count == 2)
+                        {
+                            if (_resolvedTypes.TryGetValue(tupleCall.Arguments[0], out var kt))
+                            {
+                                keyType = MapType(kt);
+                            }
+                            if (_resolvedTypes.TryGetValue(tupleCall.Arguments[1], out var vt))
+                            {
+                                valType = MapType(vt);
+                            }
+                        }
+                        else if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var entryT)
+                            && entryT is GenericType gt && gt.Name == "Tuple2" && gt.TypeArgs.Count == 2)
+                        {
+                            // Fallback using type parameters, stripping out A and B
+                            keyType = MapType(gt.TypeArgs[0]);
+                            valType = MapType(gt.TypeArgs[1]);
+                            if (keyType == "A" || keyType == "B") keyType = "object";
+                            if (valType == "A" || valType == "B") valType = "object";
+                        }
+                        return $"Map<{keyType}, {valType}>({mapArgsStr})";
+                    }
+
+                    // Handle OptionFactory: Option(value) => Option<T>(value)
+                    if (call.Callee is IdentifierExpr optId && optId.Name == "Option")
+                    {
+                        string optArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string valType = "object";
+                        if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var valT))
+                        {
+                            valType = MapType(valT);
+                        }
+                        return $"Option<{valType}>({optArgsStr})";
+                    }
+
+
                     if (_resolvedTypes.TryGetValue(call.Callee, out var calleeType) && calleeType is FunctionType funType)
                     {
                         int expectedCount = funType.ParamTypes.Count;
@@ -598,6 +654,40 @@ public class CodeGenerator
 
             case MatchExpr match:
                 return GenerateMatchExpr(match);
+
+            case MemberAccessExpr memberAccess:
+                {
+                    string receiverStr = GenerateExpr(memberAccess.Receiver);
+                    string memberName = char.ToUpper(memberAccess.Member[0]) + memberAccess.Member.Substring(1);
+                    
+                    if (memberAccess.Member == "flatten")
+                    {
+                        string innerTypeStr = "object";
+                        if (_resolvedTypes.TryGetValue(memberAccess, out var resolvedT) &&
+                            resolvedT is GenericType resGt && resGt.TypeArgs.Count > 0)
+                        {
+                            innerTypeStr = MapType(resGt.TypeArgs[0]);
+                        }
+                        return $"{receiverStr}.Flatten<{innerTypeStr}>()";
+                    }
+
+                    if (memberAccess.Arguments == null)
+                    {
+                        if (memberAccess.Member is "size" or "isEmpty" or "headValue" or "tailList")
+                        {
+                            return $"{receiverStr}.{memberName}";
+                        }
+                        else
+                        {
+                            return $"{receiverStr}.{memberName}()";
+                        }
+                    }
+                    else
+                    {
+                        string memberArgsStr = string.Join(", ", memberAccess.Arguments.Select(GenerateExpr));
+                        return $"{receiverStr}.{memberName}({memberArgsStr})";
+                    }
+                }
 
             default:
                 throw new Exception($"Unknown expression type: {expr.GetType().Name}");
@@ -809,6 +899,9 @@ public class CodeGenerator
                 "None" => $"SSharp.Runtime.None<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Cons" => $"SSharp.Runtime.Cons<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Tuple2" => $"SSharp.Runtime.SSharpTuple2<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 _ => $"{gt.Name}<{string.Join(", ", gt.TypeArgs.Select(MapType))}>"
             },
             FunctionType ft => ft.ParamTypes.Count == 0 
@@ -841,6 +934,9 @@ public class CodeGenerator
             "None" => $"SSharp.Runtime.None<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Cons" => $"SSharp.Runtime.Cons<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Tuple2" => $"SSharp.Runtime.SSharpTuple2<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             _ => node.TypeArgs.Count > 0 
                 ? $"{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
                 : node.Name
