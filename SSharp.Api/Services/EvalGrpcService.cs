@@ -18,7 +18,7 @@ public class EvalGrpcService : EvalService.EvalServiceBase
         return Task.FromResult(result);
     }
 
-    internal static EvalResponse EvalCore(string code)
+    public static EvalResponse EvalCore(string code)
     {
         if (string.IsNullOrWhiteSpace(code))
         {
@@ -60,13 +60,41 @@ public class EvalGrpcService : EvalService.EvalServiceBase
             return resp;
         }
 
+        // ── Determine Type Info ────────────────────────────────────────────────
+        string? typeInfo = null;
+        var lastDecl = ast.Decls.LastOrDefault();
+        if (lastDecl is ExprDecl exprDecl)
+        {
+            if (typeChecker.ResolvedTypes.TryGetValue(exprDecl.Expression, out var t))
+            {
+                typeInfo = t.ToString();
+            }
+        }
+        else if (lastDecl is ValDecl valDecl)
+        {
+            if (typeChecker.ResolvedTypes.TryGetValue(valDecl.Value, out var t))
+            {
+                typeInfo = t.ToString();
+            }
+            else if (valDecl.Type != null)
+            {
+                typeInfo = valDecl.Type.ToString();
+            }
+        }
+        else if (lastDecl is FunDecl funDecl)
+        {
+            var paramTypes = funDecl.Params.Select(p => p.Type.ToString());
+            string retType = funDecl.ReturnType?.ToString() ?? "Unit";
+            typeInfo = $"({string.Join(", ", paramTypes)}) => {retType}";
+        }
+
         // ── Code Gen ──────────────────────────────────────────────────────────
         var codeGen    = new CodeGenerator(typeChecker.ResolvedTypes);
         string genCode = codeGen.Generate(ast);
 
         // ── Eval ──────────────────────────────────────────────────────────────
         var backend    = new EvalBackend();
-        var evalResult = backend.Eval(genCode);
+        var evalResult = backend.Eval(genCode, typeInfo: typeInfo);
 
         var response = new EvalResponse
         {

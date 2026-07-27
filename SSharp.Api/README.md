@@ -109,6 +109,24 @@ Content-Type: application/json
 
 #### Examples
 
+**List Construction with `::` and `Nil`**
+
+```sh
+curl -s -X POST http://localhost:5000/api/eval \
+  -H "Content-Type: application/json" \
+  -d '{"code":"1 :: 2 :: 3 :: Nil"}'
+```
+
+```json
+{
+  "success": true,
+  "output": "",
+  "errors": [],
+  "elapsedMs": 15,
+  "typeInfo": "List[Int]"
+}
+```
+
 **Simple expression**
 
 ```sh

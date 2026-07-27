@@ -493,6 +493,10 @@ public class CodeGenerator
                 return EscapeIdentifier(id.Name);
 
             case BinaryExpr bin:
+                if (bin.Op.Type == TokenType.ColonColon)
+                {
+                    return $"({GenerateExpr(bin.Rhs)}).Prepended({GenerateExpr(bin.Lhs)})";
+                }
                 return $"({GenerateExpr(bin.Lhs)} {bin.Op.Lexeme} {GenerateExpr(bin.Rhs)})";
 
             case UnaryExpr unary:

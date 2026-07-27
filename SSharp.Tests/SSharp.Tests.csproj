@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SSharp.Compiler\SSharp.Compiler.csproj" />
     <ProjectReference Include="..\SSharp.Runtime\SSharp.Runtime.csproj" />
+    <ProjectReference Include="..\SSharp.Api\SSharp.Api.csproj" />
   </ItemGroup>
 
 </Project>

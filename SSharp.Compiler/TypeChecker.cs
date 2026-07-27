@@ -208,6 +208,11 @@ public class TypeChecker
                 if (valDecl.Type != null)
                 {
                     SSharpType expectedType = ResolveType(valDecl.Type);
+                    if (valDecl.Value is IdentifierExpr valId && (valId.Name == "Nil" || valId.Name == "None"))
+                    {
+                        ResolvedTypes[valDecl.Value] = expectedType;
+                        valType = expectedType;
+                    }
                     if (!IsSubtype(valType, expectedType))
                     {
                         Error(valDecl.Line, valDecl.Column, $"Type mismatch: Val '{valDecl.Name}' expected {expectedType}, but got {valType}.");
@@ -370,6 +375,43 @@ public class TypeChecker
                 if (bin.Op.Type is TokenType.Equals or TokenType.NotEquals)
                 {
                     return SSharpType.Boolean;
+                }
+
+                // Cons operator (::)
+                if (bin.Op.Type == TokenType.ColonColon)
+                {
+                    if (bin.Rhs is IdentifierExpr rhsId && (rhsId.Name == "Nil" || rhsId.Name == "None"))
+                    {
+                        var inferredListType = new GenericType("List", new List<SSharpType> { lhsType });
+                        ResolvedTypes[rhsId] = inferredListType;
+                        rhsType = inferredListType;
+                    }
+
+                    if (rhsType is GenericType rhsGt && (rhsGt.Name == "List" || rhsGt.Name == "Cons" || rhsGt.Name == "Nil"))
+                    {
+                        SSharpType listElemType = rhsGt.TypeArgs.Count > 0 ? rhsGt.TypeArgs[0] : SSharpType.Any;
+                        if (listElemType == SSharpType.Any)
+                        {
+                            var updatedListType = new GenericType("List", new List<SSharpType> { lhsType });
+                            ResolvedTypes[bin.Rhs] = updatedListType;
+                            return updatedListType;
+                        }
+                        if (IsSubtype(lhsType, listElemType))
+                        {
+                            return new GenericType("List", new List<SSharpType> { listElemType });
+                        }
+                        if (IsSubtype(listElemType, lhsType))
+                        {
+                            return new GenericType("List", new List<SSharpType> { lhsType });
+                        }
+                        return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (rhsType == SSharpType.Any)
+                    {
+                        return new GenericType("List", new List<SSharpType> { lhsType });
+                    }
+                    Error(bin.Op.Line, bin.Op.Column, $"Operator '::' expects a List on the right-hand side, but got {rhsType}.");
+                    return new GenericType("List", new List<SSharpType> { lhsType });
                 }
 
                 Error(bin.Op.Line, bin.Op.Column, $"Unknown binary operator '{bin.Op.Lexeme}'.");

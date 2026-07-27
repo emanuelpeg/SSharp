@@ -17,6 +17,7 @@ public class Parser
         Match,       // match
         Equality,    // == !=
         Comparison,  // < <= > >=
+        Cons,        // ::
         Term,        // + -
         Factor,      // * / %
         Unary,       // ! - (prefix)
@@ -358,8 +359,9 @@ public class Parser
             case TokenType.LessOrEqual:
             case TokenType.GreaterThan:
             case TokenType.GreaterOrEqual:
+            case TokenType.ColonColon:
                 Precedence prec = GetPrecedence(op.Type);
-                Expr right = ParseExpression(prec);
+                Expr right = ParseExpression(op.Type == TokenType.ColonColon ? prec - 1 : prec);
                 return new BinaryExpr(left, op, right);
 
             case TokenType.LParen:
@@ -621,6 +623,7 @@ public class Parser
             TokenType.Match => Precedence.Match,
             TokenType.Equals or TokenType.NotEquals => Precedence.Equality,
             TokenType.LessThan or TokenType.LessOrEqual or TokenType.GreaterThan or TokenType.GreaterOrEqual => Precedence.Comparison,
+            TokenType.ColonColon => Precedence.Cons,
             TokenType.Plus or TokenType.Minus => Precedence.Term,
             TokenType.Asterisk or TokenType.Slash or TokenType.Percent => Precedence.Factor,
             TokenType.LParen or TokenType.LBracket or TokenType.Dot => Precedence.Call,

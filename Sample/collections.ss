@@ -2,6 +2,8 @@ def main(): Unit = {
     // ── List enriquecida ─────────────────────────────────────────────────────
     val l = List(1, 2, 3, 4, 5)
     println("List original: " + l)
+    val lCons = 1 :: 2 :: 3 :: Nil
+    println("List creada con 1::2::3::Nil: " + lCons)
     println("Size: " + l.size)
     println("Head: " + l.headValue)
     println("Tail: " + l.tailList)

@@ -271,4 +271,27 @@ public class TranspilerTests
         Assert.Contains("var y = new System.Lazy<int>(() => (x * 2));", output);
         Assert.Contains("return (y.Value + 5);", output);
     }
+
+    [Fact]
+    public void TestConsOperatorListConstruction()
+    {
+        string source = @"
+            import ""SSharp.Runtime"";
+
+            val l1: List[Int] = 1 :: 2 :: 3 :: Nil;
+            val l2 = 1 :: 2 :: 3 :: Nil;
+        ";
+        string output = Transpile(source);
+
+        Assert.Contains("public static readonly SSharp.Runtime.SSharpList<int> l1 = (((new SSharp.Runtime.Nil<int>()).Prepended(3)).Prepended(2)).Prepended(1)", output);
+        Assert.Contains("public static readonly SSharp.Runtime.SSharpList<int> l2 = (((new SSharp.Runtime.Nil<int>()).Prepended(3)).Prepended(2)).Prepended(1)", output);
+    }
+
+    [Fact]
+    public void TestApiTypeInfoForListCons()
+    {
+        var response = SSharp.Api.Services.EvalGrpcService.EvalCore("1 :: 2 :: 3 :: Nil");
+        Assert.True(response.Success);
+        Assert.Equal("List[Int]", response.TypeInfo);
+    }
 }

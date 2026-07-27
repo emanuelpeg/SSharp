@@ -12,12 +12,13 @@ SSharp is a statically-typed, expression-based functional language that transpil
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
 - **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, and **infix list `head::tail` patterns**)
-- **List Factory** for easy construction of lists (`List(1, 2, 3)`) with automatic common supertype inference
+- **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
 - **Generic functions** and data types
 - **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
 - **Runtime library**: `List[A]` (singly-linked), `Option[A]`, and standard `print`/`println`/`readLine`
+- **Stateless Eval API** — REST (`POST /api/eval`) & gRPC (`ssharp.EvalService/Eval`) with automatic `typeInfo` resolution
 - **Rust-style compiler diagnostics** — informative formatting pinpointing file, line, and column for errors
 - **Transpiles to C#** — output is clean, human-readable C# source code
 
@@ -30,8 +31,10 @@ SSharp/
 ├── SSharp.Compiler/     # Lexer, Parser, TypeChecker, CodeGenerator
 ├── SSharp.Runtime/      # Runtime library (List, Option, Unit, Predef)
 ├── SSharp.Backend/      # Roslyn-based C# → .NET assembly compiler
+├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
+├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-└── SSharp.Tests/        # Unit tests for the compiler and transpiler
+└── SSharp.Tests/        # Unit tests for compiler, transpiler & API
 ```
 
 ---
@@ -217,13 +220,16 @@ def len[T](l: List[T])(default : Int): Int = l match {
 
 ### Working with Lists
 
-SSharp includes built-in support for constructing lists using the `List` factory, and matching elements using the infix `::` operator:
+SSharp includes built-in support for constructing lists using the `List(...)` factory or right-associative cons operator (`1 :: 2 :: 3 :: Nil`), and matching elements using infix `head::tail` patterns:
 
 ```scala
 import "SSharp.Runtime"
 
-// Construction using List(...)
-val myList = List(1, 2, 3)
+// Construction using List(...) factory
+val listA = List(1, 2, 3)
+
+// Construction using right-associative cons operator (::) and Nil
+val listB = 1 :: 2 :: 3 :: Nil
 
 // Matching with infix cons (::) operator
 def length[A](list: List[A]): Int = list match {
