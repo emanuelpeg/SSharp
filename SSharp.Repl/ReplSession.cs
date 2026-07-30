@@ -82,20 +82,28 @@ public class ReplSession
         string generatedCs = codeGen.Generate(ast);
 
         // ── Eval (in memory) ──────────────────────────────────────────────────
-        var evalResult = _evalBackend.Eval(generatedCs, typeInfo: typeInfo);
+        var evalResult = _evalBackend.Eval(generatedCs, typeInfo: typeInfo, bindingName: bindingName);
 
         if (!evalResult.Success)
-            return new ReplResult(false, evalResult.Output, evalResult.Errors, evalResult.ElapsedMs, typeInfo, bindingName);
+            return new ReplResult(false, evalResult.Output, evalResult.Errors, evalResult.ElapsedMs, typeInfo, bindingName, evalResult.ValueString);
 
         // ── Commit the snippet to context ─────────────────────────────────────
+        // For bare expressions, store the wrapped `val resN = <expr>` form so that
+        // subsequent compilations emit a static field instead of a bare ExprDecl
+        // statement in Main. Bare arithmetic expressions like `(2 + 2);` are not
+        // valid C# statements and would cause CS0201.
+        string contextEntry = (isExpr && bindingName != null)
+            ? $"val {bindingName} = {trimmed}"
+            : trimmed;
+
         if (_context.Length > 0) _context.AppendLine();
-        _context.Append(trimmed);
+        _context.Append(contextEntry);
 
         // Bump res counter if this was an anonymous expression
         if (isExpr && bindingName != null && bindingName.StartsWith("res"))
             _resCounter++;
 
-        return new ReplResult(true, evalResult.Output, evalResult.Errors, evalResult.ElapsedMs, typeInfo, bindingName);
+        return new ReplResult(true, evalResult.Output, evalResult.Errors, evalResult.ElapsedMs, typeInfo, bindingName, evalResult.ValueString);
     }
 
     /// <summary>Reset the session context (like `:reset` in a REPL).</summary>

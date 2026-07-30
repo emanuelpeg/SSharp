@@ -409,10 +409,10 @@ public static class Program
                 if (!string.IsNullOrEmpty(result.Output))
                     Console.WriteLine(result.Output);
 
-                // Print type annotation: `name: Type = <value>` or `name: Type`
+                // Print type annotation: `name = value : Type` or `name: Type`
                 if (result.TypeInfo != null && result.BindingName != null)
                 {
-                    string display = BuildReplDisplay(result.BindingName, result.TypeInfo, result.Output);
+                    string display = BuildReplDisplay(result.BindingName, result.TypeInfo, result.ValueString);
                     Console.ForegroundColor = ConsoleColor.DarkCyan;
                     Console.WriteLine(display);
                     Console.ResetColor();
@@ -424,12 +424,10 @@ public static class Program
         return 0;
     }
 
-    private static string BuildReplDisplay(string name, string typeInfo, string output)
+    private static string BuildReplDisplay(string name, string typeInfo, string? valueString)
     {
-        // If the captured output already contains the value (e.g. from println),
-        // just show the type without repeating the value.
-        if (!string.IsNullOrEmpty(output))
-            return $"{name}: {typeInfo}";
+        if (valueString != null)
+            return $"{name} = {valueString} : {typeInfo}";
 
         return $"{name}: {typeInfo}";
     }

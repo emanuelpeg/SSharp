@@ -114,6 +114,44 @@ error[type]: Type mismatch: Val 'x' expected Int, but got String.
 
 ---
 
+## Interactive REPL
+
+SSharp includes an interactive REPL (Read-Eval-Print Loop) for executing code snippets and testing expressions statefully.
+
+To start the REPL, run:
+
+```sh
+dotnet run --project SSharp.CLI -- repl
+```
+
+### Example
+
+```text
+ssharp> 2 + 2
+res0 = 4 : Int
+
+ssharp> val name = "SSharp"
+name = "SSharp" : String
+
+ssharp> List(1, 2, 3)
+res1 = List(1, 2, 3) : List[Int]
+```
+
+### REPL Commands
+
+| Command | Description |
+|---------|-------------|
+| `:help`, `:h` | Show available REPL commands |
+| `:quit`, `:q` | Exit the REPL session |
+| `:reset` | Clear accumulated session context and bindings |
+| `:ctx`, `:context` | Display accumulated session code context |
+
+### Multi-line Input
+
+Opening a block with `{` enters multi-line mode. The session accumulates code until all open braces are closed before evaluating.
+
+---
+
 ## Language Guide
 
 ### Values

@@ -294,4 +294,55 @@ public class TranspilerTests
         Assert.True(response.Success);
         Assert.Equal("List[Int]", response.TypeInfo);
     }
+
+    [Fact]
+    public void TestReplEvaluation()
+    {
+        var session = new SSharp.Repl.ReplSession();
+
+        var res1 = session.Submit("2 + 2");
+        Assert.True(res1.IsSuccess);
+        Assert.Equal("res0", res1.BindingName);
+        Assert.Equal("Int", res1.TypeInfo);
+        Assert.Equal("4", res1.ValueString);
+
+        var res2 = session.Submit("val x = 10");
+        Assert.True(res2.IsSuccess);
+        Assert.Equal("x", res2.BindingName);
+        Assert.Equal("Int", res2.TypeInfo);
+        Assert.Equal("10", res2.ValueString);
+
+        var res3 = session.Submit("x + 5");
+        Assert.True(res3.IsSuccess);
+        Assert.Equal("res1", res3.BindingName);
+        Assert.Equal("Int", res3.TypeInfo);
+        Assert.Equal("15", res3.ValueString);
+    }
+
+    /// <summary>
+    /// Regression test: bare expression in context was stored as-is, causing
+    /// CS0201 ("only assignment, call, ... can be used as a statement") when
+    /// the next snippet was compiled. Now bare expressions are stored as
+    /// `val resN = &lt;expr&gt;` so they always produce a valid static field.
+    /// </summary>
+    [Fact]
+    public void TestReplValAfterBareExpression_CS0201Regression()
+    {
+        var session = new SSharp.Repl.ReplSession();
+
+        // 1. Submit a bare arithmetic expression (was stored wrongly as `2 + 2`)
+        var r1 = session.Submit("2 + 2");
+        Assert.True(r1.IsSuccess, "bare expr should succeed");
+
+        // 2. Declare a val — this used to fail with CS0201
+        var r2 = session.Submit("val a = 3");
+        Assert.True(r2.IsSuccess, $"val after bare expr failed: {string.Join("; ", r2.Errors)}");
+        Assert.Equal("a", r2.BindingName);
+        Assert.Equal("3", r2.ValueString);
+
+        // 3. Use both bindings
+        var r3 = session.Submit("a + res0");
+        Assert.True(r3.IsSuccess, $"a + res0 failed: {string.Join("; ", r3.Errors)}");
+        Assert.Equal("7", r3.ValueString);
+    }
 }

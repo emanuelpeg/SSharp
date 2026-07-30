@@ -32,7 +32,7 @@ public class EvalBackend
     /// <param name="typeInfo">
     ///   Optional human-readable SSharp type string for the last expression, shown by the REPL.
     /// </param>
-    public EvalResult Eval(string csharpSource, string? runtimeDllPath = null, string? typeInfo = null)
+    public EvalResult Eval(string csharpSource, string? runtimeDllPath = null, string? typeInfo = null, string? bindingName = null)
     {
         var sw = Stopwatch.StartNew();
 
@@ -112,6 +112,45 @@ public class EvalBackend
 
             entryPoint.Invoke(null, new object?[] { Array.Empty<string>() });
 
+            // Retrieve evaluated value of binding if requested
+            string? valueString = null;
+            if (bindingName != null)
+            {
+                var programType = assembly.GetType("SSharp.Generated.Program");
+                if (programType != null)
+                {
+                    // EscapeIdentifier may prefix C# keywords with '@', but CLR member
+                    // names never include '@', so strip it for reflection lookup.
+                    string clrName = bindingName.TrimStart('@');
+                    object? valObj = null;
+                    bool found = false;
+
+                    var field = programType.GetField(clrName, BindingFlags.Public | BindingFlags.Static);
+                    if (field == null)
+                        field = programType.GetField($"@{clrName}", BindingFlags.Public | BindingFlags.Static);
+
+                    if (field != null)
+                    {
+                        valObj = field.GetValue(null);
+                        found = true;
+                    }
+                    else
+                    {
+                        var prop = programType.GetProperty(clrName, BindingFlags.Public | BindingFlags.Static);
+                        if (prop != null)
+                        {
+                            valObj = prop.GetValue(null);
+                            found = true;
+                        }
+                    }
+
+                    if (found)
+                    {
+                        valueString = FormatValue(valObj);
+                    }
+                }
+            }
+
             sw.Stop();
             string output = capturedOutput.ToString();
             string errOutput = capturedErrors.ToString();
@@ -120,12 +159,15 @@ public class EvalBackend
             if (!string.IsNullOrWhiteSpace(errOutput))
                 runtimeErrors.Add(errOutput.TrimEnd());
 
-            return new EvalResult(true, output.TrimEnd('\r', '\n'), runtimeErrors, sw.ElapsedMilliseconds, typeInfo);
+            return new EvalResult(true, output.TrimEnd('\r', '\n'), runtimeErrors, sw.ElapsedMilliseconds, typeInfo, valueString);
         }
         catch (TargetInvocationException tie)
         {
             sw.Stop();
-            string msg = (tie.InnerException ?? tie).Message;
+            Exception inner = tie.InnerException ?? tie;
+            if (inner is TypeInitializationException tiex && tiex.InnerException != null)
+                inner = tiex.InnerException;
+            string msg = inner.Message;
             return new EvalResult(false, capturedOutput.ToString().TrimEnd('\r', '\n'),
                 new[] { $"Runtime error: {msg}" }, sw.ElapsedMilliseconds, typeInfo);
         }
@@ -141,6 +183,16 @@ public class EvalBackend
             Console.SetError(originalErr);
             ctx.Unload();
         }
+    }
+
+    private static string FormatValue(object? obj)
+    {
+        if (obj == null) return "null";
+        if (obj is string s) return $"\"{s}\"";
+        if (obj is bool b) return b ? "true" : "false";
+        if (obj is double d) return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (obj is float f) return f.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return obj.ToString() ?? "null";
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

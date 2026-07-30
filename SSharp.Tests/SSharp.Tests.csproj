@@ -22,6 +22,8 @@
     <ProjectReference Include="..\SSharp.Compiler\SSharp.Compiler.csproj" />
     <ProjectReference Include="..\SSharp.Runtime\SSharp.Runtime.csproj" />
     <ProjectReference Include="..\SSharp.Api\SSharp.Api.csproj" />
+    <ProjectReference Include="..\SSharp.Repl\SSharp.Repl.csproj" />
+    <ProjectReference Include="..\SSharp.Backend\SSharp.Backend.csproj" />
   </ItemGroup>
 
 </Project>

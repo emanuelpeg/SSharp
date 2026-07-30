@@ -17,4 +17,8 @@ public record ReplResult(
     /// <summary>
     /// The name of the last binding introduced, if any (e.g. "x" for <c>val x = 42</c>).
     /// </summary>
-    string? BindingName = null);
+    string? BindingName = null,
+    /// <summary>
+    /// Evaluated string representation of the value (e.g. "42", "List(1, 2, 3)").
+    /// </summary>
+    string? ValueString = null);
