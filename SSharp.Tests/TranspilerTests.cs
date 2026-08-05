@@ -345,4 +345,28 @@ public class TranspilerTests
         Assert.True(r3.IsSuccess, $"a + res0 failed: {string.Join("; ", r3.Errors)}");
         Assert.Equal("7", r3.ValueString);
     }
+
+    [Fact]
+    public void TestHeadAndTailListFunctions()
+    {
+        var session = new SSharp.Repl.ReplSession();
+
+        var resHead = session.Submit("head(List(1, 2, 3))");
+        Assert.True(resHead.IsSuccess, $"head failed: {string.Join("; ", resHead.Errors)}");
+        Assert.Equal("Int", resHead.TypeInfo);
+        Assert.Equal("1", resHead.ValueString);
+
+        var resTail = session.Submit("tail(List(1, 2, 3))");
+        Assert.True(resTail.IsSuccess, $"tail failed: {string.Join("; ", resTail.Errors)}");
+        Assert.Equal("List[Int]", resTail.TypeInfo);
+        Assert.Equal("List(2, 3)", resTail.ValueString);
+
+        var resDotHead = session.Submit("List(10, 20).head");
+        Assert.True(resDotHead.IsSuccess, $"dot head failed: {string.Join("; ", resDotHead.Errors)}");
+        Assert.Equal("10", resDotHead.ValueString);
+
+        var resDotTail = session.Submit("List(10, 20).tail");
+        Assert.True(resDotTail.IsSuccess, $"dot tail failed: {string.Join("; ", resDotTail.Errors)}");
+        Assert.Equal("List(20)", resDotTail.ValueString);
+    }
 }

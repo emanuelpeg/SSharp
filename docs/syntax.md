@@ -325,6 +325,11 @@ import "SSharp.Runtime"
 - `println(x: Any): Unit`: Prints to the console appending a newline.
 - `readLine(): String`: Reads a line of text entered by the user from the console.
 
+### Built-in List Functions
+
+- `head[T](list: List[T]): T`: Returns the first element of a non-empty list.
+- `tail[T](list: List[T]): List[T]`: Returns the rest of a non-empty list (excluding the first element).
+
 ### Higher-Order Methods on Collections
 
 SSharp's immutable lists and collections include standard functional methods:

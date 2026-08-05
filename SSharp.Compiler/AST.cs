@@ -21,13 +21,32 @@ public record ExprDecl(Expr Expression) : Decl;
 
 public record ValDecl(string Name, TypeNode? Type, Expr Value, int Line, int Column, bool IsLazy = false) : Decl;
 
+public enum Variance
+{
+    Invariant,
+    Covariant,
+    Contravariant
+}
+
+public record TypeParam(string Name, Variance Variance = Variance.Invariant)
+{
+    public override string ToString() => Variance switch
+    {
+        Variance.Covariant => $"+{Name}",
+        Variance.Contravariant => $"-{Name}",
+        _ => Name
+    };
+
+    public static implicit operator TypeParam(string name) => new(name);
+}
+
 public record Param(string Name, TypeNode Type, int Line, int Column);
 
-public record FunDecl(string Name, List<string> TypeParams, List<Param> Params, TypeNode? ReturnType, Expr Body, int Line, int Column, bool IsTailRec = false) : Decl;
+public record FunDecl(string Name, List<TypeParam> TypeParams, List<Param> Params, TypeNode? ReturnType, Expr Body, int Line, int Column, bool IsTailRec = false) : Decl;
 
-public record TraitDecl(string Name, List<string> TypeParams, int Line, int Column) : Decl;
+public record TraitDecl(string Name, List<TypeParam> TypeParams, int Line, int Column) : Decl;
 
-public record ClassDecl(string Name, List<string> TypeParams, List<Param> ConstructorParams, TypeNode? ExtendsType, bool IsCase, int Line, int Column) : Decl;
+public record ClassDecl(string Name, List<TypeParam> TypeParams, List<Param> ConstructorParams, TypeNode? ExtendsType, bool IsCase, int Line, int Column) : Decl;
 
 // Expressions
 public abstract record Expr : ASTNode;

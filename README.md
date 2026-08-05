@@ -34,7 +34,8 @@ SSharp/
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-└── SSharp.Tests/        # Unit tests for compiler, transpiler & API
+├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
+└── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
 ```
 
 ---

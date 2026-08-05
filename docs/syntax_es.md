@@ -325,6 +325,11 @@ import "SSharp.Runtime"
 - `println(x: Any): Unit`: Imprime en la consola agregando un salto de línea.
 - `readLine(): String`: Lee una línea de texto introducida por el usuario en la consola.
 
+### Funciones Integradas para Listas
+
+- `head[T](lista: List[T]): T`: Retorna el primer elemento de una lista no vacía.
+- `tail[T](lista: List[T]): List[T]`: Retorna el resto de la lista no vacía (excluyendo el primer elemento).
+
 ### Métodos de Orden Superior en Colecciones
 
 Las listas y colecciones inmutables en SSharp incluyen los métodos funcionales estándar:

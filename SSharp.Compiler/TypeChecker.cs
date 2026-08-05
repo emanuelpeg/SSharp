@@ -77,9 +77,13 @@ public class TypeChecker
         _env.Define("println", new FunctionType(new List<SSharpType> { SSharpType.Any }, SSharpType.Unit));
         _env.Define("readLine", new FunctionType(new List<SSharpType>(), SSharpType.String));
 
+        var listGenericParam = new List<SSharpType> { new GenericType("List", new List<SSharpType> { new PrimitiveType("A") }) };
+        _env.Define("head", new FunctionType(listGenericParam, new PrimitiveType("A")));
+        _env.Define("tail", new FunctionType(listGenericParam, new GenericType("List", new List<SSharpType> { new PrimitiveType("A") })));
+
         // Register List and Option in types if needed
         // Register List trait
-        _traits["List"] = new TraitDecl("List", new List<string> { "A" }, 0, 0);
+        _traits["List"] = new TraitDecl("List", new List<TypeParam> { new TypeParam("A", Variance.Covariant) }, 0, 0);
 
         // Register Cons class
         var consParams = new List<Param>
@@ -87,7 +91,7 @@ public class TypeChecker
             new Param("head", new TypeNode("A"), 0, 0),
             new Param("tail", new TypeNode("List", new List<TypeNode> { new TypeNode("A") }), 0, 0)
         };
-        _classes["Cons"] = new ClassDecl("Cons", new List<string> { "A" }, consParams, new TypeNode("List", new List<TypeNode> { new TypeNode("A") }), IsCase: true, 0, 0);
+        _classes["Cons"] = new ClassDecl("Cons", new List<TypeParam> { new TypeParam("A", Variance.Covariant) }, consParams, new TypeNode("List", new List<TypeNode> { new TypeNode("A") }), IsCase: true, 0, 0);
 
         var consParamTypes = new List<SSharpType>
         {
@@ -98,26 +102,26 @@ public class TypeChecker
         _env.Define("Cons", new FunctionType(consParamTypes, consRetType));
 
         // Register Nil case object
-        _classes["Nil"] = new ClassDecl("Nil", new List<string>(), new List<Param>(), new TypeNode("List", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
+        _classes["Nil"] = new ClassDecl("Nil", new List<TypeParam>(), new List<Param>(), new TypeNode("List", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
         _env.Define("Nil", new GenericType("List", new List<SSharpType> { SSharpType.Any }));
         _env.Define("List", new PrimitiveType("ListFactory"));
 
         // Register Option trait
-        _traits["Option"] = new TraitDecl("Option", new List<string> { "A" }, 0, 0);
+        _traits["Option"] = new TraitDecl("Option", new List<TypeParam> { new TypeParam("A", Variance.Covariant) }, 0, 0);
 
         // Register Some class
         var someParams = new List<Param>
         {
             new Param("value", new TypeNode("A"), 0, 0)
         };
-        _classes["Some"] = new ClassDecl("Some", new List<string> { "A" }, someParams, new TypeNode("Option", new List<TypeNode> { new TypeNode("A") }), IsCase: true, 0, 0);
+        _classes["Some"] = new ClassDecl("Some", new List<TypeParam> { new TypeParam("A", Variance.Covariant) }, someParams, new TypeNode("Option", new List<TypeNode> { new TypeNode("A") }), IsCase: true, 0, 0);
 
         var someParamTypes = new List<SSharpType> { new PrimitiveType("A") };
         var someRetType = new GenericType("Option", new List<SSharpType> { new PrimitiveType("A") });
         _env.Define("Some", new FunctionType(someParamTypes, someRetType));
 
         // Register None case object
-        _classes["None"] = new ClassDecl("None", new List<string>(), new List<Param>(), new TypeNode("Option", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
+        _classes["None"] = new ClassDecl("None", new List<TypeParam>(), new List<Param>(), new TypeNode("Option", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
         _env.Define("None", new GenericType("Option", new List<SSharpType> { SSharpType.Any }));
 
         // Register Set factory
@@ -169,7 +173,7 @@ public class TypeChecker
                         paramTypes.Add(ResolveType(p.Type));
                     }
                     var retType = cls.TypeParams.Count > 0
-                        ? new GenericType(cls.Name, cls.TypeParams.ConvertAll(tp => (SSharpType)new PrimitiveType(tp)))
+                        ? new GenericType(cls.Name, cls.TypeParams.ConvertAll(tp => (SSharpType)new PrimitiveType(tp.Name)))
                         : (SSharpType)new PrimitiveType(cls.Name);
                     
                     _env.Define(cls.Name, new FunctionType(paramTypes, retType));
@@ -233,7 +237,7 @@ public class TypeChecker
                 // Define type parameters in local env as any/primitive types
                 foreach (var tp in funDecl.TypeParams)
                 {
-                    _env.Define(tp, new PrimitiveType(tp));
+                    _env.Define(tp.Name, new PrimitiveType(tp.Name));
                 }
 
                 // Define params in function environment
@@ -535,6 +539,30 @@ public class TypeChecker
                     }
                     return new GenericType("Option", new List<SSharpType> { valType });
                 }
+                if (call.Callee is IdentifierExpr headId && headId.Name == "head")
+                {
+                    if (call.Arguments.Count > 0)
+                    {
+                        SSharpType argType = CheckExpr(call.Arguments[0]);
+                        if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                        {
+                            return gt.TypeArgs[0];
+                        }
+                    }
+                    return SSharpType.Any;
+                }
+                if (call.Callee is IdentifierExpr tailId && tailId.Name == "tail")
+                {
+                    if (call.Arguments.Count > 0)
+                    {
+                        SSharpType argType = CheckExpr(call.Arguments[0]);
+                        if (argType is GenericType gt && gt.Name == "List")
+                        {
+                            return argType;
+                        }
+                    }
+                    return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                }
                 if (calleeType is FunctionType funType)
                 {
                     int expectedCount = funType.ParamTypes.Count;
@@ -654,9 +682,9 @@ public class TypeChecker
                                     return SSharpType.Int;
                                 case "isEmpty":
                                     return SSharpType.Boolean;
-                                case "headValue":
+                                case "head" or "headValue":
                                     return elemType;
-                                case "tailList":
+                                case "tail" or "tailList":
                                     return receiverType;
                                 case "contains":
                                     return SSharpType.Boolean;
@@ -952,10 +980,35 @@ public class TypeChecker
                 return false;
             }
             if (subGt.TypeArgs.Count != superGt.TypeArgs.Count) return false;
+
+            List<TypeParam>? declaredParams = null;
+            if (_traits.TryGetValue(subGt.Name, out var traitDecl))
+            {
+                declaredParams = traitDecl.TypeParams;
+            }
+            else if (_classes.TryGetValue(subGt.Name, out var classDecl))
+            {
+                declaredParams = classDecl.TypeParams;
+            }
+
             for (int i = 0; i < subGt.TypeArgs.Count; i++)
             {
-                // Covariant generic parameters by default (like Option[+A] or List[+A])
-                if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i])) return false;
+                var variance = (declaredParams != null && i < declaredParams.Count) 
+                    ? declaredParams[i].Variance 
+                    : Variance.Covariant;
+
+                switch (variance)
+                {
+                    case Variance.Covariant:
+                        if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i])) return false;
+                        break;
+                    case Variance.Contravariant:
+                        if (!IsSubtype(superGt.TypeArgs[i], subGt.TypeArgs[i])) return false;
+                        break;
+                    case Variance.Invariant:
+                        if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i]) || !IsSubtype(superGt.TypeArgs[i], subGt.TypeArgs[i])) return false;
+                        break;
+                }
             }
             return true;
         }

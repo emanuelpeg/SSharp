@@ -96,7 +96,7 @@ public class CodeGenerator
         {
             if (decl is ClassDecl cls && cls.IsCase && cls.ConstructorParams.Count > 0)
             {
-                string tparams = cls.TypeParams.Count > 0 ? $"<{string.Join(", ", cls.TypeParams)}>" : "";
+                string tparams = cls.TypeParams.Count > 0 ? $"<{string.Join(", ", cls.TypeParams.Select(tp => tp.Name))}>" : "";
                 string typeName = $"{cls.Name}{tparams}";
                 string parameters = string.Join(", ", cls.ConstructorParams.Select(p => $"{MapTypeNode(p.Type)} {p.Name}"));
                 string arguments = string.Join(", ", cls.ConstructorParams.Select(p => p.Name));
@@ -154,13 +154,13 @@ public class CodeGenerator
 
             case TraitDecl trait:
                 {
-                    string tparams = trait.TypeParams.Count > 0 ? $"<{string.Join(", ", trait.TypeParams)}>" : "";
+                    string tparams = trait.TypeParams.Count > 0 ? $"<{string.Join(", ", trait.TypeParams.Select(tp => tp.Name))}>" : "";
                     return $"{spaces}public abstract record {trait.Name}{tparams};";
                 }
 
             case ClassDecl cls:
                 {
-                    string tparams = cls.TypeParams.Count > 0 ? $"<{string.Join(", ", cls.TypeParams)}>" : "";
+                    string tparams = cls.TypeParams.Count > 0 ? $"<{string.Join(", ", cls.TypeParams.Select(tp => tp.Name))}>" : "";
                     string extends = cls.ExtendsType != null ? $" : {MapTypeNode(cls.ExtendsType)}" : "";
                     
                     if (cls.IsCase && cls.ConstructorParams.Count == 0)
@@ -213,7 +213,7 @@ public class CodeGenerator
 
             case FunDecl fun:
                 {
-                    string tparams = fun.TypeParams.Count > 0 ? $"<{string.Join(", ", fun.TypeParams)}>" : "";
+                    string tparams = fun.TypeParams.Count > 0 ? $"<{string.Join(", ", fun.TypeParams.Select(tp => tp.Name))}>" : "";
                     string retType;
                     if (fun.ReturnType != null)
                     {
@@ -675,9 +675,18 @@ public class CodeGenerator
                         return $"{receiverStr}.Flatten<{innerTypeStr}>()";
                     }
 
+                    if (memberAccess.Member is "head" or "headValue")
+                    {
+                        return $"{receiverStr}.HeadValue";
+                    }
+                    if (memberAccess.Member is "tail" or "tailList")
+                    {
+                        return $"{receiverStr}.TailList";
+                    }
+
                     if (memberAccess.Arguments == null)
                     {
-                        if (memberAccess.Member is "size" or "isEmpty" or "headValue" or "tailList")
+                        if (memberAccess.Member is "size" or "isEmpty")
                         {
                             return $"{receiverStr}.{memberName}";
                         }
@@ -760,7 +769,7 @@ public class CodeGenerator
                             var typeArgs = new List<string>();
                             foreach (var tp in clsDecl.TypeParams)
                             {
-                                if (typeMap.TryGetValue(tp, out var t))
+                                if (typeMap.TryGetValue(tp.Name, out var t))
                                 {
                                     typeArgs.Add(MapType(t));
                                 }

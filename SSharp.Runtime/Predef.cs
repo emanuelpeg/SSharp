@@ -33,6 +33,14 @@ public static class Predef
         return list;
     }
 
+    // ── List operations ───────────────────────────────────────────────────────
+
+    /// <summary>Returns the first element of the list (head).</summary>
+    public static T head<T>(SSharpList<T> list) => list.HeadValue;
+
+    /// <summary>Returns the rest of the list (tail).</summary>
+    public static SSharpList<T> tail<T>(SSharpList<T> list) => list.TailList;
+
     // ── Set factory ──────────────────────────────────────────────────────────
 
     /// <summary>Creates an immutable Set from the given elements.</summary>

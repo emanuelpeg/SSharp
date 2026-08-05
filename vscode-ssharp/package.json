@@ -1,0 +1,42 @@
+{
+  "name": "vscode-ssharp",
+  "displayName": "SSharp Language Support",
+  "description": "Syntax highlighting and language support for SSharp",
+  "version": "0.1.0",
+  "publisher": "ssharp",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "ssharp",
+    "scala",
+    "functional",
+    "syntax highlighting"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "ssharp",
+        "aliases": [
+          "SSharp",
+          "ssharp"
+        ],
+        "extensions": [
+          ".ss",
+          ".ssharp"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "ssharp",
+        "scopeName": "source.ssharp",
+        "path": "./syntaxes/ssharp.tmLanguage.json"
+      }
+    ]
+  }
+}

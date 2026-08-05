@@ -92,7 +92,7 @@ public class Parser
                     extendsType = ParseType();
                 }
                 Match(TokenType.Semicolon);
-                return new ClassDecl(objName.Lexeme, new List<string>(), new List<Param>(), extendsType, IsCase: true, caseToken.Line, caseToken.Column);
+                return new ClassDecl(objName.Lexeme, new List<TypeParam>(), new List<Param>(), extendsType, IsCase: true, caseToken.Line, caseToken.Column);
             }
             Error(caseToken, "Expected 'class' or 'object' after 'case'.");
             throw new Exception("Parse error");
@@ -139,19 +139,34 @@ public class Parser
         return new ImportDecl((string)path.Value!);
     }
 
-    private Decl ParseTraitDecl(Token? sealedToken)
+    private List<TypeParam> ParseTypeParams()
     {
-        Token name = Consume(TokenType.Identifier, "Expected trait name.");
-        var typeParams = new List<string>();
+        var typeParams = new List<TypeParam>();
         if (Match(TokenType.LBracket))
         {
             do
             {
+                Variance variance = Variance.Invariant;
+                if (Match(TokenType.Plus))
+                {
+                    variance = Variance.Covariant;
+                }
+                else if (Match(TokenType.Minus))
+                {
+                    variance = Variance.Contravariant;
+                }
                 Token tp = Consume(TokenType.Identifier, "Expected type parameter name.");
-                typeParams.Add(tp.Lexeme);
+                typeParams.Add(new TypeParam(tp.Lexeme, variance));
             } while (Match(TokenType.Comma));
             Consume(TokenType.RBracket, "Expected ']' after type parameters.");
         }
+        return typeParams;
+    }
+
+    private Decl ParseTraitDecl(Token? sealedToken)
+    {
+        Token name = Consume(TokenType.Identifier, "Expected trait name.");
+        var typeParams = ParseTypeParams();
         Match(TokenType.Semicolon);
         int line = sealedToken?.Line ?? name.Line;
         int col = sealedToken?.Column ?? name.Column;
@@ -161,16 +176,7 @@ public class Parser
     private Decl ParseClassDecl(Token? caseOrSealedToken, bool isCase)
     {
         Token name = Consume(TokenType.Identifier, "Expected class name.");
-        var typeParams = new List<string>();
-        if (Match(TokenType.LBracket))
-        {
-            do
-            {
-                Token tp = Consume(TokenType.Identifier, "Expected type parameter name.");
-                typeParams.Add(tp.Lexeme);
-            } while (Match(TokenType.Comma));
-            Consume(TokenType.RBracket, "Expected ']' after type parameters.");
-        }
+        var typeParams = ParseTypeParams();
 
         var constructorParams = new List<Param>();
         if (Match(TokenType.LParen))
@@ -203,16 +209,7 @@ public class Parser
     private Decl ParseFunDecl(bool isTailRec = false)
     {
         Token name = Consume(TokenType.Identifier, "Expected function name.");
-        var typeParams = new List<string>();
-        if (Match(TokenType.LBracket))
-        {
-            do
-            {
-                Token tp = Consume(TokenType.Identifier, "Expected type parameter name.");
-                typeParams.Add(tp.Lexeme);
-            } while (Match(TokenType.Comma));
-            Consume(TokenType.RBracket, "Expected ']' after type parameters.");
-        }
+        var typeParams = ParseTypeParams();
 
         var @params = new List<Param>();
         do

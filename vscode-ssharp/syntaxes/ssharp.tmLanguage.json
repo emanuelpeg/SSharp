@@ -1,0 +1,149 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "SSharp",
+  "scopeName": "source.ssharp",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#annotations" },
+    { "include": "#strings" },
+    { "include": "#constants" },
+    { "include": "#keywords" },
+    { "include": "#builtins" },
+    { "include": "#types" },
+    { "include": "#declarations" },
+    { "include": "#operators" },
+    { "include": "#numbers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.ssharp",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.ssharp",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.annotation.ssharp",
+          "match": "@[a-zA-Z_]\\w*"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.ssharp",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.ssharp",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.ssharp",
+          "match": "\\b(true|false)\\b"
+        },
+        {
+          "name": "constant.language.ssharp",
+          "match": "\\b(Nil|None)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.ssharp",
+          "match": "\\b(if|else|match|case)\\b"
+        },
+        {
+          "name": "keyword.control.import.ssharp",
+          "match": "\\bimport\\b"
+        },
+        {
+          "name": "storage.type.ssharp",
+          "match": "\\b(def|val|lazy\\s+val|sealed|trait|case\\s+class|case\\s+object|class|object)\\b"
+        },
+        {
+          "name": "keyword.other.ssharp",
+          "match": "\\bextends\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.ssharp",
+          "match": "\\b(print|println|readLine|head|tail)\\b"
+        },
+        {
+          "name": "support.class.ssharp",
+          "match": "\\b(List|Set|Map|Option|Tuple2|Some|Cons)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type.primitive.ssharp",
+          "match": "\\b(Int|Double|String|Boolean|Unit|Any)\\b"
+        },
+        {
+          "name": "entity.name.type.ssharp",
+          "match": "\\b[A-Z]\\w*\\b"
+        }
+      ]
+    },
+    "declarations": {
+      "patterns": [
+        {
+          "match": "\\b(def)\\s+([a-zA-Z_]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.ssharp" },
+            "2": { "name": "entity.name.function.ssharp" }
+          }
+        },
+        {
+          "match": "\\b(val)\\s+([a-zA-Z_]\\w*)",
+          "captures": {
+            "1": { "name": "storage.type.ssharp" },
+            "2": { "name": "variable.other.readwrite.ssharp" }
+          }
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.ssharp",
+          "match": "(=>|->|::|:\\+|\\+\\+|==|!=|<=|>=|<|>|&&|\\|\\||!|=|\\+|\\-|\\*|/|%)"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.ssharp",
+          "match": "\\b\\d+\\.\\d+([eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.ssharp",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    }
+  }
+}
