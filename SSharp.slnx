@@ -6,4 +6,5 @@
   <Project Path="SSharp.Tests/SSharp.Tests.csproj" />
   <Project Path="SSharp.Repl/SSharp.Repl.csproj" />
   <Project Path="SSharp.Api/SSharp.Api.csproj" />
+  <Project Path="SSharp.Spec/SSharp.Spec.csproj" />
 </Solution>

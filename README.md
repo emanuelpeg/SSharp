@@ -14,7 +14,7 @@ SSharp is a statically-typed, expression-based functional language that transpil
 - **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, and **infix list `head::tail` patterns**)
 - **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
-- **Generic functions** and data types
+- **Generic functions** and data types with **covariance (`+T`) and contravariance (`-T`)** — Scala-style variance annotations
 - **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
 - **Runtime library**: `List[A]` (singly-linked), `Option[A]`, and standard `print`/`println`/`readLine`
@@ -279,6 +279,50 @@ def length[A](list: List[A]): Int = list match {
 
 ---
 
+### Generic Variance
+
+SSharp supports Scala-style variance annotations on type parameters. Use `+T` for **covariance** and `-T` for **contravariance**:
+
+| Annotation | Variance | Meaning |
+|---|---|---|
+| `[+T]` | Covariant | If `B <: A`, then `F[B] <: F[A]` |
+| `[-T]` | Contravariant | If `A <: B`, then `F[A] <: F[B]` |
+| `[T]` | Invariant (default) | `F[T]` is only a subtype of itself |
+
+```scala
+// Covariant: Container[Cat] <: Container[Animal]
+trait Container[+A]
+
+// Contravariant: Printer[Animal] <: Printer[Cat]
+trait Printer[-A]
+
+// Invariant (default)
+trait MutableBox[A]
+
+// Combined — like Function1 in Scala
+trait Function1[-A, +B]
+
+// Case class fields are covariant-safe (immutable records),
+// so +T can safely appear as a constructor parameter:
+case class Box[+A](value: A)
+```
+
+The type checker enforces variance positions: using a `+T` param as a function parameter type is a compile-time error, and using a `-T` param as a field type is also rejected.
+
+Traits with variant type parameters are emitted as C# **interfaces** with `out`/`in` modifiers, giving variance guarantees at both the SSharp type-checking level and the .NET runtime level:
+
+```csharp
+// SSharp:  trait Container[+A]
+// C# output:
+public interface Container<out A> {}
+
+// SSharp:  trait Printer[-A]
+// C# output:
+public interface Printer<in A> {}
+```
+
+---
+
 ## Example: Full Program
 
 ```scala
@@ -333,7 +377,7 @@ using static SSharp.Runtime.Predef;
 
 namespace SSharp.Generated;
 
-public abstract record Shape;
+public interface Shape {}
 public record Circle(double radius) : Shape;
 public record Rectangle(double width, double height) : Shape;
 

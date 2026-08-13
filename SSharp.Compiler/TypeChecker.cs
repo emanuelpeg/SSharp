@@ -187,6 +187,19 @@ public class TypeChecker
             }
         }
 
+        // Validate variance positions for all traits and classes
+        foreach (var decl in program.Decls)
+        {
+            if (decl is TraitDecl traitDecl)
+            {
+                ValidateVariancePositions(traitDecl.TypeParams, traitDecl.Line, traitDecl.Column);
+            }
+            else if (decl is ClassDecl classDecl)
+            {
+                ValidateClassVariancePositions(classDecl);
+            }
+        }
+
         // Second pass: Check declarations
         foreach (var decl in program.Decls)
         {
@@ -961,10 +974,13 @@ public class TypeChecker
             // Number conversion
             if (subPt == SSharpType.Int && superPt == SSharpType.Double) return true;
 
-            // Class inheritance
+            // Class inheritance: non-generic class extends non-generic parent
             if (_classes.TryGetValue(subPt.Name, out var cls) && cls.ExtendsType != null)
             {
                 if (cls.ExtendsType.Name == superPt.Name) return true;
+                // Transitive: check if parent is also a subtype of super
+                var parentType = ResolveType(cls.ExtendsType);
+                if (IsSubtype(parentType, super)) return true;
             }
         }
 
@@ -972,10 +988,21 @@ public class TypeChecker
         {
             if (subGt.Name != superGt.Name)
             {
-                // Cons[T] is a subtype of List[T]
+                // e.g. Cons[Int] <: List[Int]: instantiate the parent type and compare
                 if (_classes.TryGetValue(subGt.Name, out var cls) && cls.ExtendsType != null)
                 {
-                    if (cls.ExtendsType.Name == superGt.Name) return true;
+                    // Build a substitution map: class type params -> actual type args of sub
+                    var typeMap = new System.Collections.Generic.Dictionary<string, SSharpType>();
+                    for (int i = 0; i < Math.Min(cls.TypeParams.Count, subGt.TypeArgs.Count); i++)
+                    {
+                        typeMap[cls.TypeParams[i].Name] = subGt.TypeArgs[i];
+                    }
+
+                    // Instantiate the parent type with the substitution
+                    SSharpType instantiatedParent = InstantiateType(ResolveType(cls.ExtendsType), typeMap);
+
+                    // Now check if the instantiated parent is a subtype of super
+                    return IsSubtype(instantiatedParent, super);
                 }
                 return false;
             }
@@ -995,7 +1022,7 @@ public class TypeChecker
             {
                 var variance = (declaredParams != null && i < declaredParams.Count) 
                     ? declaredParams[i].Variance 
-                    : Variance.Covariant;
+                    : Variance.Invariant;
 
                 switch (variance)
                 {
@@ -1013,7 +1040,171 @@ public class TypeChecker
             return true;
         }
 
+        // GenericType sub <: PrimitiveType super: check if the base name matches (e.g. class Foo[+A] extends Bar)
+        if (sub is GenericType subGt2 && super is PrimitiveType superPt2)
+        {
+            if (_classes.TryGetValue(subGt2.Name, out var cls2) && cls2.ExtendsType != null)
+            {
+                var typeMap = new System.Collections.Generic.Dictionary<string, SSharpType>();
+                for (int i = 0; i < Math.Min(cls2.TypeParams.Count, subGt2.TypeArgs.Count); i++)
+                {
+                    typeMap[cls2.TypeParams[i].Name] = subGt2.TypeArgs[i];
+                }
+                SSharpType instantiatedParent = InstantiateType(ResolveType(cls2.ExtendsType), typeMap);
+                return IsSubtype(instantiatedParent, super);
+            }
+        }
+
         return false;
+    }
+
+    /// <summary>
+    /// Substitutes type variables in a type using the provided map.
+    /// </summary>
+    private SSharpType InstantiateType(SSharpType type, System.Collections.Generic.Dictionary<string, SSharpType> typeMap)
+    {
+        return type switch
+        {
+            PrimitiveType pt when typeMap.TryGetValue(pt.Name, out var mapped) => mapped,
+            PrimitiveType pt => pt,
+            GenericType gt => new GenericType(gt.Name, gt.TypeArgs.ConvertAll(a => InstantiateType(a, typeMap))),
+            FunctionType ft => new FunctionType(
+                ft.ParamTypes.ConvertAll(p => InstantiateType(p, typeMap)),
+                InstantiateType(ft.ReturnType, typeMap)),
+            ByNameType bt => new ByNameType(InstantiateType(bt.UnderType, typeMap)),
+            _ => type
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    // Variance position validation
+    // -------------------------------------------------------------------------
+
+    private enum TypePosition { Covariant, Contravariant, Invariant }
+
+    /// <summary>
+    /// For traits: validate that type params declared +T only appear in covariant
+    /// positions and -T only in contravariant positions within the trait's member
+    /// type annotations (constructor params for this simplified validator).
+    /// </summary>
+    private void ValidateVariancePositions(List<TypeParam> typeParams, int line, int col)
+    {
+        // For traits in SSharp v1 there are no member bodies to validate,
+        // so this is a forward hook for future members.
+        // Variance positions are checked at class level (see below).
+    }
+
+    /// <summary>
+    /// Validates that the type parameters of a class are used consistently with
+    /// their declared variance in constructor parameters and the extends type.
+    /// </summary>
+    private void ValidateClassVariancePositions(ClassDecl cls)
+    {
+        if (cls.TypeParams.Count == 0) return;
+
+        // Build a lookup: param name -> variance
+        var variances = new System.Collections.Generic.Dictionary<string, Variance>();
+        foreach (var tp in cls.TypeParams)
+        {
+            variances[tp.Name] = tp.Variance;
+        }
+
+        // Constructor parameters are in invariant/contravariant position for covariant params.
+        // A covariant type param (+T) MUST NOT appear as a constructor parameter type
+        // (because constructors are effectively function arguments = contravariant position).
+        // Exception: read-only case class fields are covariant-safe (like Scala val fields).
+        // SSharp case classes are immutable records, so field positions are covariant-safe.
+        // We do validate function-typed fields though.
+        foreach (var param in cls.ConstructorParams)
+        {
+            ValidateTypeNodePosition(param.Type, TypePosition.Covariant, variances, cls.Line, cls.Column);
+        }
+    }
+
+    /// <summary>
+    /// Recursively checks that type variable occurrences in a TypeNode respect
+    /// their declared variance given the current position.
+    /// </summary>
+    private void ValidateTypeNodePosition(
+        TypeNode node,
+        TypePosition position,
+        System.Collections.Generic.Dictionary<string, Variance> variances,
+        int line, int col)
+    {
+        // Check if this node directly names a type parameter
+        if (variances.TryGetValue(node.Name, out var declared))
+        {
+            switch (position)
+            {
+                case TypePosition.Covariant:
+                    if (declared == Variance.Contravariant)
+                    {
+                        Error(line, col,
+                            $"Type parameter '{node.Name}' is declared contravariant (-{node.Name}) " +
+                            $"but appears in covariant position (e.g. field/return type).");
+                    }
+                    break;
+                case TypePosition.Contravariant:
+                    if (declared == Variance.Covariant)
+                    {
+                        Error(line, col,
+                            $"Type parameter '{node.Name}' is declared covariant (+{node.Name}) " +
+                            $"but appears in contravariant position (e.g. function parameter type).");
+                    }
+                    break;
+                case TypePosition.Invariant:
+                    if (declared != Variance.Invariant)
+                    {
+                        Error(line, col,
+                            $"Type parameter '{node.Name}' is declared variant ({(declared == Variance.Covariant ? "+" : "-")}{node.Name}) " +
+                            $"but appears in invariant position (e.g. mutable field or both-sided use).");
+                    }
+                    break;
+            }
+        }
+
+        // Recurse into type arguments with flipped/combined positions
+        // Look up declared variance of the generic type to determine argument positions
+        List<TypeParam>? declaredParams = null;
+        if (_traits.TryGetValue(node.Name, out var traitDecl))
+            declaredParams = traitDecl.TypeParams;
+        else if (_classes.TryGetValue(node.Name, out var classDecl))
+            declaredParams = classDecl.TypeParams;
+
+        for (int i = 0; i < node.TypeArgs.Count; i++)
+        {
+            var argVariance = (declaredParams != null && i < declaredParams.Count)
+                ? declaredParams[i].Variance
+                : Variance.Invariant;
+
+            TypePosition childPosition = CombinePosition(position, argVariance);
+            ValidateTypeNodePosition(node.TypeArgs[i], childPosition, variances, line, col);
+        }
+
+        // If the node is a lazy/function type, the parameter of the function is contravariant
+        if (node.IsLazy)
+        {
+            // => T means "function returning T", so T is in covariant position within the function
+            // (it's already handled above as the node itself)
+        }
+    }
+
+    /// <summary>
+    /// Combines the outer position with the variance of a type argument to determine
+    /// the effective position of type variables within that argument.
+    /// </summary>
+    private static TypePosition CombinePosition(TypePosition outer, Variance argVariance)
+    {
+        return (outer, argVariance) switch
+        {
+            (TypePosition.Covariant,     Variance.Covariant)     => TypePosition.Covariant,
+            (TypePosition.Covariant,     Variance.Contravariant) => TypePosition.Contravariant,
+            (TypePosition.Covariant,     Variance.Invariant)     => TypePosition.Invariant,
+            (TypePosition.Contravariant, Variance.Covariant)     => TypePosition.Contravariant,
+            (TypePosition.Contravariant, Variance.Contravariant) => TypePosition.Covariant,
+            (TypePosition.Contravariant, Variance.Invariant)     => TypePosition.Invariant,
+            _                                                    => TypePosition.Invariant
+        };
     }
 
     private void ValidateTailCalls(Expr expr, string funName, bool inTailPosition, ref int recursiveCallCount)

@@ -154,15 +154,34 @@ public class CodeGenerator
 
             case TraitDecl trait:
                 {
-                    string tparams = trait.TypeParams.Count > 0 ? $"<{string.Join(", ", trait.TypeParams.Select(tp => tp.Name))}>" : "";
-                    return $"{spaces}public abstract record {trait.Name}{tparams};";
+                    string tparams;
+                    if (trait.TypeParams.Count > 0)
+                    {
+                        var tparamStrs = trait.TypeParams.Select(tp => tp.Variance switch
+                        {
+                            Variance.Covariant     => $"out {tp.Name}",
+                            Variance.Contravariant => $"in {tp.Name}",
+                            _                      => tp.Name
+                        });
+                        tparams = $"<{string.Join(", ", tparamStrs)}>";
+                    }
+                    else
+                    {
+                        tparams = "";
+                    }
+                    return $"{spaces}public interface {trait.Name}{tparams} {{}}";
                 }
 
             case ClassDecl cls:
                 {
                     string tparams = cls.TypeParams.Count > 0 ? $"<{string.Join(", ", cls.TypeParams.Select(tp => tp.Name))}>" : "";
-                    string extends = cls.ExtendsType != null ? $" : {MapTypeNode(cls.ExtendsType)}" : "";
-                    
+                    // Determine extends clause: for interfaces use ", IFace" syntax; records can implement interfaces
+                    string extends = "";
+                    if (cls.ExtendsType != null)
+                    {
+                        extends = $" : {MapTypeNode(cls.ExtendsType)}";
+                    }
+
                     if (cls.IsCase && cls.ConstructorParams.Count == 0)
                     {
                         var sb = new StringBuilder();

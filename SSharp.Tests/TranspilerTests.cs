@@ -101,7 +101,7 @@ public class TranspilerTests
         ";
         string output = Transpile(source);
 
-        Assert.Contains("public abstract record Shape;", output);
+        Assert.Contains("public interface Shape {}", output);
         Assert.Contains("public record Circle(double radius) : Shape;", output);
         Assert.Contains("public record Rectangle(double width, double height) : Shape;", output);
         Assert.Contains("public record EmptyShape : Shape", output);
@@ -111,6 +111,7 @@ public class TranspilerTests
         Assert.Contains("public static Circle Circle(double radius) => new Circle(radius);", output);
         Assert.Contains("public static Rectangle Rectangle(double width, double height) => new Rectangle(width, height);", output);
     }
+
 
     [Fact]
     public void TestLambdaExpression()
