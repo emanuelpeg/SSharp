@@ -340,6 +340,10 @@ public class TypeChecker
                 return SSharpType.Unit;
 
             case IdentifierExpr id:
+                // 'null' is a special built-in literal
+                if (id.Name == "null")
+                    return SSharpType.Any;
+
                 if (_env.Lookup(id.Name, out SSharpType type))
                 {
                     return type;
@@ -476,10 +480,19 @@ public class TypeChecker
                 SSharpType thenType = CheckExpr(condExpr.ThenBranch);
                 SSharpType elseType = CheckExpr(condExpr.ElseBranch);
 
-                // Both branches must align. If they don't, return common supertype (e.g. Any)
-                if (IsSubtype(thenType, elseType)) return elseType;
-                if (IsSubtype(elseType, thenType)) return thenType;
-                return SSharpType.Any;
+                // If one branch is None/Nil and the other is Option[T]/List[T], specialize None/Nil to match
+                if (condExpr.ThenBranch is IdentifierExpr thenId && (thenId.Name == "Nil" || thenId.Name == "None") && elseType is GenericType gtElse && gtElse.TypeArgs.Count > 0)
+                {
+                    ResolvedTypes[condExpr.ThenBranch] = gtElse;
+                    thenType = gtElse;
+                }
+                if (condExpr.ElseBranch is IdentifierExpr elseId && (elseId.Name == "Nil" || elseId.Name == "None") && thenType is GenericType gtThen && gtThen.TypeArgs.Count > 0)
+                {
+                    ResolvedTypes[condExpr.ElseBranch] = gtThen;
+                    elseType = gtThen;
+                }
+
+                return FindCommonSupertype(thenType, elseType);
 
             case CallExpr call:
                 SSharpType calleeType = CheckExpr(call.Callee);
@@ -586,16 +599,16 @@ public class TypeChecker
                         Error(call.Line, call.Column, $"Function expected {expectedCount} arguments, but got {actualCount}.");
                     }
 
+                    var typeSubst = new Dictionary<string, SSharpType>();
+
                     for (int i = 0; i < Math.Min(expectedCount, actualCount); i++)
                     {
                         SSharpType argType = CheckExpr(call.Arguments[i]);
-                        // If callee has generic parameters that we're passing, we can skip strict checks or bind type variables
-                        // For a simple v1, we check subtype or allow matching generic parameter names (like T, A)
                         SSharpType expected = funType.ParamTypes[i];
                         SSharpType expectedCheck = expected is ByNameType bt ? bt.UnderType : expected;
                         if (expectedCheck is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0]))
                         {
-                            // This is a type variable (e.g. A, T) - accept any type here (simplifying type inference)
+                            typeSubst[pt.Name] = argType;
                             continue;
                         }
                         if (!IsSubtype(argType, expectedCheck))
@@ -604,14 +617,21 @@ public class TypeChecker
                         }
                     }
 
+                    SSharpType instantiatedRetType = typeSubst.Count > 0 
+                        ? InstantiateType(funType.ReturnType, typeSubst) 
+                        : funType.ReturnType;
+
                     if (actualCount < expectedCount)
                     {
-                        // Partial application: return a function taking the remaining parameters
                         var remainingParams = funType.ParamTypes.GetRange(actualCount, expectedCount - actualCount);
-                        return new FunctionType(remainingParams, funType.ReturnType);
+                        if (typeSubst.Count > 0)
+                        {
+                            remainingParams = remainingParams.ConvertAll(p => InstantiateType(p, typeSubst));
+                        }
+                        return new FunctionType(remainingParams, instantiatedRetType);
                     }
 
-                    return funType.ReturnType;
+                    return instantiatedRetType;
                 }
                 // If it is a generic constructor check (e.g. Cons(1, Nil)), or a direct Type constructor call
                 // represented by custom PrimitiveType (like List or Cons)
@@ -655,21 +675,9 @@ public class TypeChecker
                     SSharpType caseBodyType = CheckExpr(c.Body);
                     _env = prevCaseEnv;
 
-                    if (casesCommonType == null)
-                    {
-                        casesCommonType = caseBodyType;
-                    }
-                    else if (!IsSubtype(caseBodyType, casesCommonType))
-                    {
-                        if (IsSubtype(casesCommonType, caseBodyType))
-                        {
-                            casesCommonType = caseBodyType;
-                        }
-                        else
-                        {
-                            casesCommonType = SSharpType.Any;
-                        }
-                    }
+                    casesCommonType = casesCommonType == null 
+                        ? caseBodyType 
+                        : FindCommonSupertype(casesCommonType, caseBodyType);
                 }
                 return casesCommonType ?? SSharpType.Unit;
 
@@ -857,6 +865,14 @@ public class TypeChecker
                         }
                     }
 
+                    // Case class field access: resolve field type from class declaration
+                    if (receiverType is PrimitiveType pt && _classes.TryGetValue(pt.Name, out var receiverClass))
+                    {
+                        var field = receiverClass.ConstructorParams.FirstOrDefault(p => p.Name == memberAccess.Member);
+                        if (field != null)
+                            return ResolveType(field.Type);
+                    }
+
                     return SSharpType.Any;
                 }
 
@@ -950,6 +966,14 @@ public class TypeChecker
         if (node.Name == "Unit") return SSharpType.Unit;
         if (node.Name == "Any") return SSharpType.Any;
 
+        // Function type: Fun[ParamType, ReturnType]
+        if (node.Name == "Fun" && node.TypeArgs.Count == 2)
+        {
+            var paramType = ResolveType(node.TypeArgs[0]);
+            var retType = ResolveType(node.TypeArgs[1]);
+            return new FunctionType(new List<SSharpType> { paramType }, retType);
+        }
+
         var args = new List<SSharpType>();
         foreach (var arg in node.TypeArgs)
         {
@@ -1027,6 +1051,11 @@ public class TypeChecker
                 switch (variance)
                 {
                     case Variance.Covariant:
+                        if (subGt.TypeArgs[i] == SSharpType.Any && (subGt.Name is "Option" or "List" or "Some" or "None" or "Cons" or "Nil"))
+                        {
+                            // None / Nil / empty with Any element type acts as bottom type for covariant Option/List
+                            continue;
+                        }
                         if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i])) return false;
                         break;
                     case Variance.Contravariant:
@@ -1055,7 +1084,57 @@ public class TypeChecker
             }
         }
 
+        // FunctionType structural equality
+        if (sub is FunctionType subFt && super is FunctionType superFt)
+        {
+            if (subFt.ParamTypes.Count != superFt.ParamTypes.Count) return false;
+            for (int i = 0; i < subFt.ParamTypes.Count; i++)
+            {
+                // contravariant in params
+                if (!IsSubtype(superFt.ParamTypes[i], subFt.ParamTypes[i])) return false;
+            }
+            return IsSubtype(subFt.ReturnType, superFt.ReturnType);
+        }
+
         return false;
+    }
+
+    private SSharpType FindCommonSupertype(SSharpType a, SSharpType b)
+    {
+        if (a == b) return a;
+        if (IsSubtype(a, b)) return b;
+        if (IsSubtype(b, a)) return a;
+
+        if (a is GenericType gtA && b is GenericType gtB && gtA.Name == gtB.Name && gtA.TypeArgs.Count == gtB.TypeArgs.Count)
+        {
+            if (gtA.Name is "Option" or "List" or "Some" or "Cons" or "Nil" or "None")
+            {
+                string targetName = (gtA.Name is "Some" or "None") ? "Option" : (gtA.Name is "Cons" or "Nil" ? "List" : gtA.Name);
+                var commonArgs = new List<SSharpType>();
+                for (int i = 0; i < gtA.TypeArgs.Count; i++)
+                {
+                    if (gtA.TypeArgs[i] == SSharpType.Any && gtB.TypeArgs[i] != SSharpType.Any)
+                        commonArgs.Add(gtB.TypeArgs[i]);
+                    else if (gtB.TypeArgs[i] == SSharpType.Any && gtA.TypeArgs[i] != SSharpType.Any)
+                        commonArgs.Add(gtA.TypeArgs[i]);
+                    else
+                        commonArgs.Add(FindCommonSupertype(gtA.TypeArgs[i], gtB.TypeArgs[i]));
+                }
+                return new GenericType(targetName, commonArgs);
+            }
+        }
+
+        if (a is PrimitiveType ptA && _classes.TryGetValue(ptA.Name, out var clsA) && clsA.ExtendsType != null)
+        {
+            return FindCommonSupertype(ResolveType(clsA.ExtendsType), b);
+        }
+
+        if (b is PrimitiveType ptB && _classes.TryGetValue(ptB.Name, out var clsB) && clsB.ExtendsType != null)
+        {
+            return FindCommonSupertype(a, ResolveType(clsB.ExtendsType));
+        }
+
+        return SSharpType.Any;
     }
 
     /// <summary>

@@ -110,7 +110,11 @@ public class EvalBackend
                     sw.ElapsedMilliseconds, typeInfo);
             }
 
-            entryPoint.Invoke(null, new object?[] { Array.Empty<string>() });
+            var entryParams = entryPoint.GetParameters();
+            object?[]? invokeArgs = entryParams.Length == 0
+                ? null
+                : new object?[] { Array.Empty<string>() };
+            entryPoint.Invoke(null, invokeArgs);
 
             // Retrieve evaluated value of binding if requested
             string? valueString = null;

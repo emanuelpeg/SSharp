@@ -29,14 +29,17 @@ SSharp is a statically-typed, expression-based functional language that transpil
 ```
 SSharp/
 ├── SSharp.Compiler/     # Lexer, Parser, TypeChecker, CodeGenerator
-├── SSharp.Runtime/      # Runtime library (List, Option, Unit, Predef)
-├── SSharp.Backend/      # Roslyn-based C# → .NET assembly compiler
+├── SSharp.Runtime/      # Runtime library (List, Option, Set, Map, Tuple2, Unit, Predef)
+├── SSharp.Backend/      # Roslyn-based in-memory evaluator & .NET assembly compiler
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
+├── SSharp.Spec/         # Language specification test suite (47+ verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
 ```
+
+> 📖 **Language Specification**: For a detailed breakdown of all language features under test and their functional programming motivations, see the [**SSharp.Spec README**](SSharp.Spec/README.md) ([Spanish version](SSharp.Spec/README_es.md)).
 
 ---
 
@@ -54,8 +57,16 @@ dotnet build
 
 ### Running Tests
 
+Run all unit and specification tests across the solution:
+
 ```sh
 dotnet test
+```
+
+To run only the language specification test suite:
+
+```sh
+dotnet test SSharp.Spec\SSharp.Spec.csproj
 ```
 
 ---

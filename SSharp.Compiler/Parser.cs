@@ -273,7 +273,17 @@ public class Parser
             } while (Match(TokenType.Comma));
             Consume(TokenType.RBracket, "Expected ']' after type arguments.");
         }
-        return new TypeNode(name.Lexeme, typeArgs, isLazy);
+        TypeNode baseType = new TypeNode(name.Lexeme, typeArgs, isLazy);
+
+        // Support function types: A => B
+        if (!isLazy && Peek().Type == TokenType.Arrow)
+        {
+            Advance(); // consume '=>'
+            TypeNode returnType = ParseType();
+            // Represent as Fun[paramType, returnType]
+            return new TypeNode("Fun", new List<TypeNode> { baseType, returnType });
+        }
+        return baseType;
     }
 
     private Expr ParseExpression(Precedence precedence = Precedence.None)

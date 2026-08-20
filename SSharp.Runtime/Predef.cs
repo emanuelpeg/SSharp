@@ -59,7 +59,15 @@ public static class Predef
 
     // ── Option factory ───────────────────────────────────────────────────────
 
+    /// <summary>Creates a Some option.</summary>
+    public static Some<T> Some<T>(T value) => new Some<T>(value);
+
     /// <summary>Creates an Option from the given value (Some if not null, None otherwise).</summary>
     public static SSharpOption<T> Option<T>(T value) =>
         value == null ? new None<T>() : new Some<T>(value);
+
+    // ── Cons factory ─────────────────────────────────────────────────────────
+
+    /// <summary>Creates a Cons cell for list.</summary>
+    public static Cons<T> Cons<T>(T head, SSharpList<T> tail) => new Cons<T>(head, tail);
 }

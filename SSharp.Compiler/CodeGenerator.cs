@@ -509,6 +509,9 @@ public class CodeGenerator
                 {
                     return $"{id.Name}.Instance";
                 }
+                // 'null' is a C# keyword and must not be escaped
+                if (id.Name == "null")
+                    return "null";
                 return EscapeIdentifier(id.Name);
 
             case BinaryExpr bin:
@@ -584,6 +587,30 @@ public class CodeGenerator
                             valType = MapType(valT);
                         }
                         return $"Option<{valType}>({optArgsStr})";
+                    }
+
+                    // Handle Some(value) => Some<T>(value)
+                    if (call.Callee is IdentifierExpr someId && someId.Name == "Some")
+                    {
+                        string someArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string valType = "object";
+                        if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var valT))
+                        {
+                            valType = MapType(valT);
+                        }
+                        return $"Some<{valType}>({someArgsStr})";
+                    }
+
+                    // Handle Cons(head, tail) => Cons<T>(head, tail)
+                    if (call.Callee is IdentifierExpr consId && consId.Name == "Cons")
+                    {
+                        string consArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string elemType = "object";
+                        if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var elemT))
+                        {
+                            elemType = MapType(elemT);
+                        }
+                        return $"Cons<{elemType}>({consArgsStr})";
                     }
 
 
@@ -681,7 +708,20 @@ public class CodeGenerator
             case MemberAccessExpr memberAccess:
                 {
                     string receiverStr = GenerateExpr(memberAccess.Receiver);
-                    string memberName = char.ToUpper(memberAccess.Member[0]) + memberAccess.Member.Substring(1);
+
+                    // Determine if this member access targets a case class field (keep lowercase)
+                    // vs a runtime method (capitalize first letter)
+                    string? caseClassName = null;
+                    if (_resolvedTypes.TryGetValue(memberAccess.Receiver, out var recvT) && recvT is PrimitiveType recvPrimitive)
+                        caseClassName = recvPrimitive.Name;
+
+                    bool isField = caseClassName != null &&
+                                   _classDecls.TryGetValue(caseClassName, out var fieldCls) &&
+                                   fieldCls.ConstructorParams.Any(p => p.Name == memberAccess.Member);
+
+                    string memberName = isField
+                        ? memberAccess.Member
+                        : char.ToUpper(memberAccess.Member[0]) + memberAccess.Member.Substring(1);
                     
                     if (memberAccess.Member == "flatten")
                     {
@@ -705,7 +745,8 @@ public class CodeGenerator
 
                     if (memberAccess.Arguments == null)
                     {
-                        if (memberAccess.Member is "size" or "isEmpty")
+                        // Fields (case class fields, known collection props) → no parens
+                        if (memberAccess.Member is "size" or "isEmpty" || isField)
                         {
                             return $"{receiverStr}.{memberName}";
                         }
@@ -738,13 +779,19 @@ public class CodeGenerator
         sb.AppendLine($"({GenerateExpr(match.Expression)}) switch");
         sb.AppendLine("{");
         
+        bool lastIsExhaustive = match.Cases.Count > 0 &&
+            match.Cases[^1].Pattern is WildcardPattern or IdentifierPattern;
+
         foreach (var c in match.Cases)
         {
             string patternStr = GeneratePattern(c.Pattern, matchedType);
             sb.AppendLine($"    {patternStr} => {GenerateExpr(c.Body)},");
         }
-        
-        sb.AppendLine("    _ => throw new System.InvalidOperationException(\"Pattern match failed\")");
+
+        if (!lastIsExhaustive)
+        {
+            sb.AppendLine("    _ => throw new System.InvalidOperationException(\"Pattern match failed\")");
+        }
         sb.Append("}");
         return sb.ToString();
     }
@@ -969,6 +1016,11 @@ public class CodeGenerator
             "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Tuple2" => $"SSharp.Runtime.SSharpTuple2<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Fun" => node.TypeArgs.Count switch
+            {
+                0 => "System.Action",
+                _ => $"System.Func<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
+            },
             _ => node.TypeArgs.Count > 0 
                 ? $"{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
                 : node.Name
