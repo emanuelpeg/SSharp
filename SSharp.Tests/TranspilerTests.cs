@@ -362,12 +362,26 @@ public class TranspilerTests
         Assert.Equal("List[Int]", resTail.TypeInfo);
         Assert.Equal("List(2, 3)", resTail.ValueString);
 
+        // Dot syntax on lists is rejected in 100% pure functional SSharp
         var resDotHead = session.Submit("List(10, 20).head");
-        Assert.True(resDotHead.IsSuccess, $"dot head failed: {string.Join("; ", resDotHead.Errors)}");
-        Assert.Equal("10", resDotHead.ValueString);
+        Assert.False(resDotHead.IsSuccess, "dot head should be rejected in pure functional SSharp");
 
         var resDotTail = session.Submit("List(10, 20).tail");
-        Assert.True(resDotTail.IsSuccess, $"dot tail failed: {string.Join("; ", resDotTail.Errors)}");
-        Assert.Equal("List(20)", resDotTail.ValueString);
+        Assert.False(resDotTail.IsSuccess, "dot tail should be rejected in pure functional SSharp");
+    }
+
+    [Fact]
+    public void TestPipeOperator()
+    {
+        var session = new SSharp.Repl.ReplSession();
+
+        var res = session.Submit("List(1, 2, 3, 4) |> filter((x: Int) => x % 2 == 0) |> map((x: Int) => x * 10) |> sum");
+        Assert.True(res.IsSuccess, $"Pipe failed: {string.Join("; ", res.Errors)}");
+        Assert.Equal("Int", res.TypeInfo);
+        Assert.Equal("60", res.ValueString);
+
+        var resLambda = session.Submit("5 |> ((x: Int) => x * 3)");
+        Assert.True(resLambda.IsSuccess, $"Pipe lambda failed: {string.Join("; ", resLambda.Errors)}");
+        Assert.Equal("15", resLambda.ValueString);
     }
 }

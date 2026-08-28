@@ -168,7 +168,7 @@ val multiplicar = (x: Int, y: Int) => x * y
 
 // Pasar una lambda a una función de orden superior
 val lista = List(1, 2, 3, 4)
-val duplicados = lista.map((x: Int) => x * 2)
+val duplicados = map((x: Int) => x * 2, lista)
 ```
 
 ---
@@ -330,21 +330,39 @@ import "SSharp.Runtime"
 - `head[T](lista: List[T]): T`: Retorna el primer elemento de una lista no vacía.
 - `tail[T](lista: List[T]): List[T]`: Retorna el resto de la lista no vacía (excluyendo el primer elemento).
 
-### Métodos de Orden Superior en Colecciones
+### Funciones Libres de Orden Superior para Colecciones
 
-Las listas y colecciones inmutables en SSharp incluyen los métodos funcionales estándar:
+SSharp es 100% puramente funcional: las operaciones sobre colecciones son funciones libres provistas por el Prelude:
 
 ```scala
 val numeros = List(1, 2, 3, 4, 5)
 
 // map: Transforma cada elemento
-val dobles = numeros.map((x: Int) => x * 2)
+val dobles = map((x: Int) => x * 2, numeros)
 
 // filter: Filtra los elementos según un predicado
-val pares = numeros.filter((x: Int) => x % 2 == 0)
+val pares = filter((x: Int) => x % 2 == 0, numeros)
 
 // foldLeft: Reduce la lista acumulando un valor desde la izquierda
-val sumaTotal = numeros.foldLeft(0, (acc: Int, x: Int) => acc + x)
+val sumaTotal = foldLeft(0, (acc: Int, x: Int) => acc + x, numeros)
+
+// length / size: Inspección de tamaño
+val len = length(numeros)
+
+// contains: Verifica pertenencia de un elemento
+val tieneTres = contains(3, numeros)
+```
+
+### Operador Pipe (`|>`)
+
+SSharp incluye el operador pipe hacia adelante `|>` para encadenar transformaciones de izquierda a derecha de forma fluida:
+
+```scala
+val resultado = List(1, 2, 3, 4, 5, 6)
+    |> filter((n: Int) => n % 2 == 0)
+    |> map((n: Int) => n * 10)
+    |> sum
+// resultado = 120
 ```
 
 ---

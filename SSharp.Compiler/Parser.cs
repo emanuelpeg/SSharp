@@ -14,6 +14,7 @@ public class Parser
     {
         None,
         Assignment,  // =
+        Pipe,        // |>
         Match,       // match
         Equality,    // == !=
         Comparison,  // < <= > >=
@@ -380,12 +381,27 @@ public class Parser
             case TokenType.Match:
                 return ParseMatchExpr(left, op);
 
+            case TokenType.Pipe:
+                Precedence pipePrec = GetPrecedence(op.Type);
+                Expr rightPipe = ParseExpression(pipePrec);
+                return DesugarPipe(left, rightPipe, op);
+
             case TokenType.Dot:
                 return ParseMemberAccessExpr(left, op);
 
             default:
                 throw new Exception($"Unimplemented infix operator: {op.Type}");
         }
+    }
+
+    private Expr DesugarPipe(Expr left, Expr right, Token op)
+    {
+        if (right is CallExpr call)
+        {
+            var newArgs = new List<Expr>(call.Arguments) { left };
+            return new CallExpr(call.Callee, newArgs, call.TypeArgs, op.Line, op.Column);
+        }
+        return new CallExpr(right, new List<Expr> { left }, new List<TypeNode>(), op.Line, op.Column);
     }
 
     private Expr ParseCallExpr(Expr callee, Token lParen)
@@ -627,6 +643,7 @@ public class Parser
         return type switch
         {
             TokenType.Assign => Precedence.Assignment,
+            TokenType.Pipe => Precedence.Pipe,
             TokenType.Match => Precedence.Match,
             TokenType.Equals or TokenType.NotEquals => Precedence.Equality,
             TokenType.LessThan or TokenType.LessOrEqual or TokenType.GreaterThan or TokenType.GreaterOrEqual => Precedence.Comparison,

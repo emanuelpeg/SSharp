@@ -708,58 +708,7 @@ public class CodeGenerator
             case MemberAccessExpr memberAccess:
                 {
                     string receiverStr = GenerateExpr(memberAccess.Receiver);
-
-                    // Determine if this member access targets a case class field (keep lowercase)
-                    // vs a runtime method (capitalize first letter)
-                    string? caseClassName = null;
-                    if (_resolvedTypes.TryGetValue(memberAccess.Receiver, out var recvT) && recvT is PrimitiveType recvPrimitive)
-                        caseClassName = recvPrimitive.Name;
-
-                    bool isField = caseClassName != null &&
-                                   _classDecls.TryGetValue(caseClassName, out var fieldCls) &&
-                                   fieldCls.ConstructorParams.Any(p => p.Name == memberAccess.Member);
-
-                    string memberName = isField
-                        ? memberAccess.Member
-                        : char.ToUpper(memberAccess.Member[0]) + memberAccess.Member.Substring(1);
-                    
-                    if (memberAccess.Member == "flatten")
-                    {
-                        string innerTypeStr = "object";
-                        if (_resolvedTypes.TryGetValue(memberAccess, out var resolvedT) &&
-                            resolvedT is GenericType resGt && resGt.TypeArgs.Count > 0)
-                        {
-                            innerTypeStr = MapType(resGt.TypeArgs[0]);
-                        }
-                        return $"{receiverStr}.Flatten<{innerTypeStr}>()";
-                    }
-
-                    if (memberAccess.Member is "head" or "headValue")
-                    {
-                        return $"{receiverStr}.HeadValue";
-                    }
-                    if (memberAccess.Member is "tail" or "tailList")
-                    {
-                        return $"{receiverStr}.TailList";
-                    }
-
-                    if (memberAccess.Arguments == null)
-                    {
-                        // Fields (case class fields, known collection props) → no parens
-                        if (memberAccess.Member is "size" or "isEmpty" || isField)
-                        {
-                            return $"{receiverStr}.{memberName}";
-                        }
-                        else
-                        {
-                            return $"{receiverStr}.{memberName}()";
-                        }
-                    }
-                    else
-                    {
-                        string memberArgsStr = string.Join(", ", memberAccess.Arguments.Select(GenerateExpr));
-                        return $"{receiverStr}.{memberName}({memberArgsStr})";
-                    }
+                    return $"{receiverStr}.{memberAccess.Member}";
                 }
 
             default:

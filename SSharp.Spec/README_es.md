@@ -124,7 +124,9 @@ El runner [`SpecTests.cs`](SpecTests.cs) compila y ejecuta ambos programas en me
 | `044_lazy_call_by_name_short_circuit` | Implementar estructuras de control de flujo personalizadas que solo evalúen ramas necesarias. | Parámetros call-by-name (`=> Type`) garantizando cortocircuito de efectos secundarios. |
 | `045_peano_numbers_inductive_adt` | Validar construcciones matemáticas formales mediante tipos inductivos de Peano. | Aritmética de Peano pura (`Zero`, `Succ(prev)`) y funciones de suma inductivas. |
 | `046_either_result_error_handling` | Manejar errores con tipado estricto (`Result` / `Either`) transportando mensajes de fallo sin lanzar excepciones. | Patrón `Success(v)` / `Failure(err)` con propagación funcional en pipelines. |
-| `047_higher_order_list_operations` | Emplear transformaciones estándar sobre colecciones inmutables. | Métodos funcionales de colección `List.map`, `List.filter`, `List.contains`, `List.size`. |
+| `047_higher_order_list_operations` | Emplear transformaciones estándar sobre colecciones inmutables usando funciones libres. | Funciones libres puras: `filter(p, xs)`, `map(f, xs)`, `size(xs)`, `contains(x, xs)`. |
+| `048_predef_free_functions` | Funciones libres del Prelude para inspección, transformación y reducción de listas. | Prelude funcional puro: `length`, `filter`, `map`, `foldLeft`, `reverse`, `take`, `contains`, `isEmpty`. |
+| `049_pipe_operator` | Composición de transformaciones de izquierda a derecha con el operador pipe (`\|>`). | Sintaxis de pipeline: `xs \|> filter(p) \|> map(f) \|> sum`. |
 
 ---
 

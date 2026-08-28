@@ -41,6 +41,7 @@ public enum TokenType
     ArrowThin,  // ->
     Bang,       // !
     At,         // @
+    Pipe,       // |>
 
     // Delimiters
     LParen,     // (

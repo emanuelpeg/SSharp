@@ -137,6 +137,65 @@ public class TypeChecker
 
         // Register Option factory
         _env.Define("Option", new PrimitiveType("OptionFactory"));
+
+        // ── Free higher-order functions (Prelude) ─────────────────────────────
+        // These delegate to the static methods in Predef and are accessible
+        // via `using static SSharp.Runtime.Predef` in the generated C# output.
+
+        var listA = new GenericType("List", new List<SSharpType> { new PrimitiveType("A") });
+        var listB = new GenericType("List", new List<SSharpType> { new PrimitiveType("B") });
+        var listC = new GenericType("List", new List<SSharpType> { new PrimitiveType("C") });
+        var listAny = new GenericType("List", new List<SSharpType> { SSharpType.Any });
+        var typeA = new PrimitiveType("A");
+        var typeB = new PrimitiveType("B");
+
+        // Inspection
+        _env.Define("length", new FunctionType(new List<SSharpType> { listA }, SSharpType.Int));
+        _env.Define("size", new FunctionType(new List<SSharpType> { listA }, SSharpType.Int));
+        _env.Define("isEmpty", new FunctionType(new List<SSharpType> { listA }, SSharpType.Boolean));
+        _env.Define("contains", new FunctionType(new List<SSharpType> { typeA, listA }, SSharpType.Boolean));
+
+        // Transformation
+        var mapFuncType = new FunctionType(new List<SSharpType> { typeA }, typeB);
+        _env.Define("map", new FunctionType(new List<SSharpType> { mapFuncType, listA }, listB));
+
+        var filterFuncType = new FunctionType(new List<SSharpType> { typeA }, SSharpType.Boolean);
+        _env.Define("filter", new FunctionType(new List<SSharpType> { filterFuncType, listA }, listA));
+
+        var flatMapFuncType = new FunctionType(new List<SSharpType> { typeA }, listB);
+        _env.Define("flatMap", new FunctionType(new List<SSharpType> { flatMapFuncType, listA }, listB));
+
+        _env.Define("reverse", new FunctionType(new List<SSharpType> { listA }, listA));
+        _env.Define("concat", new FunctionType(new List<SSharpType> { listA, listA }, listA));
+
+        // Reduction
+        var foldLeftFuncType = new FunctionType(new List<SSharpType> { typeB, typeA }, typeB);
+        _env.Define("foldLeft", new FunctionType(new List<SSharpType> { typeB, foldLeftFuncType, listA }, typeB));
+
+        var foldRightFuncType = new FunctionType(new List<SSharpType> { typeA, typeB }, typeB);
+        _env.Define("foldRight", new FunctionType(new List<SSharpType> { typeB, foldRightFuncType, listA }, typeB));
+
+        _env.Define("sum", new FunctionType(new List<SSharpType> { listAny }, SSharpType.Int));
+        _env.Define("product", new FunctionType(new List<SSharpType> { listAny }, SSharpType.Int));
+
+        var reduceFuncType = new FunctionType(new List<SSharpType> { typeA, typeA }, typeA);
+        _env.Define("reduce", new FunctionType(new List<SSharpType> { reduceFuncType, listA }, typeA));
+
+        // Subsets
+        _env.Define("take", new FunctionType(new List<SSharpType> { SSharpType.Int, listA }, listA));
+        _env.Define("drop", new FunctionType(new List<SSharpType> { SSharpType.Int, listA }, listA));
+
+        var predicateType = new FunctionType(new List<SSharpType> { typeA }, SSharpType.Boolean);
+        _env.Define("takeWhile", new FunctionType(new List<SSharpType> { predicateType, listA }, listA));
+        _env.Define("dropWhile", new FunctionType(new List<SSharpType> { predicateType, listA }, listA));
+
+        // Combination
+        var tuple2AB = new GenericType("Tuple2", new List<SSharpType> { typeA, typeB });
+        var listTuple2 = new GenericType("List", new List<SSharpType> { tuple2AB });
+        _env.Define("zip", new FunctionType(new List<SSharpType> { listA, listB }, listTuple2));
+
+        var zipWithFuncType = new FunctionType(new List<SSharpType> { typeA, typeB }, listC);
+        _env.Define("zipWith", new FunctionType(new List<SSharpType> { zipWithFuncType, listA, listB }, listC));
     }
 
     private void Error(int line, int col, string message)
@@ -606,12 +665,7 @@ public class TypeChecker
                         SSharpType argType = CheckExpr(call.Arguments[i]);
                         SSharpType expected = funType.ParamTypes[i];
                         SSharpType expectedCheck = expected is ByNameType bt ? bt.UnderType : expected;
-                        if (expectedCheck is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0]))
-                        {
-                            typeSubst[pt.Name] = argType;
-                            continue;
-                        }
-                        if (!IsSubtype(argType, expectedCheck))
+                        if (!MatchType(expectedCheck, argType, typeSubst))
                         {
                             Error(call.Line, call.Column, $"Argument {i + 1} type mismatch: expected {expectedCheck}, but got {argType}.");
                         }
@@ -660,19 +714,19 @@ public class TypeChecker
                 return new FunctionType(paramTypes, returnType);
 
             case MatchExpr match:
-                SSharpType matchType = CheckExpr(match.Expression);
-                SSharpType? casesCommonType = null;
+                SSharpType matchedType = CheckExpr(match.Expression);
 
+                SSharpType? casesCommonType = null;
                 foreach (var c in match.Cases)
                 {
-                    // Pattern binds variables in a case-specific environment scope
                     var caseEnv = new Env(_env);
                     var prevCaseEnv = _env;
                     _env = caseEnv;
 
-                    BindPatternVariables(c.Pattern, matchType);
+                    BindPatternVariables(c.Pattern, matchedType);
 
                     SSharpType caseBodyType = CheckExpr(c.Body);
+
                     _env = prevCaseEnv;
 
                     casesCommonType = casesCommonType == null 
@@ -692,187 +746,38 @@ public class TypeChecker
                         }
                     }
 
-                    if (receiverType is GenericType gt)
+                    // SSharp is purely functional: no OO methods on objects (like xs.map, xs.filter, xs.size, etc.).
+                    // The only dot access permitted is field access on Case Classes / Records / ADTs.
+                    if (memberAccess.Arguments != null)
                     {
-                        if (gt.Name == "List")
-                        {
-                            SSharpType elemType = gt.TypeArgs.Count > 0 ? gt.TypeArgs[0] : SSharpType.Any;
-                            switch (memberAccess.Member)
-                            {
-                                case "size" or "length":
-                                    return SSharpType.Int;
-                                case "isEmpty":
-                                    return SSharpType.Boolean;
-                                case "head" or "headValue":
-                                    return elemType;
-                                case "tail" or "tailList":
-                                    return receiverType;
-                                case "contains":
-                                    return SSharpType.Boolean;
-                                case "find":
-                                    return new GenericType("Option", new List<SSharpType> { elemType });
-                                case "forall" or "exists":
-                                    return SSharpType.Boolean;
-                                case "reverse" or "take" or "drop" or "appended" or "prepended" or "concat" or "filter":
-                                    return receiverType;
-                                case "map":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argType) &&
-                                        argType is FunctionType ft)
-                                    {
-                                        return new GenericType("List", new List<SSharpType> { ft.ReturnType });
-                                    }
-                                    return new GenericType("List", new List<SSharpType> { SSharpType.Any });
-                                case "flatMap":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argType2) &&
-                                        argType2 is FunctionType ft2)
-                                    {
-                                        if (ft2.ReturnType is GenericType returnGt && returnGt.Name == "List" && returnGt.TypeArgs.Count > 0)
-                                        {
-                                            return new GenericType("List", new List<SSharpType> { returnGt.TypeArgs[0] });
-                                        }
-                                        return ft2.ReturnType;
-                                    }
-                                    return new GenericType("List", new List<SSharpType> { SSharpType.Any });
-                                case "flatten":
-                                    if (elemType is GenericType innerListGt && innerListGt.Name == "List" && innerListGt.TypeArgs.Count > 0)
-                                    {
-                                        return new GenericType("List", new List<SSharpType> { innerListGt.TypeArgs[0] });
-                                    }
-                                    return new GenericType("List", new List<SSharpType> { SSharpType.Any });
-                                case "toSet":
-                                    return new GenericType("Set", new List<SSharpType> { elemType });
-                            }
-                        }
-                        else if (gt.Name == "Set")
-                        {
-                            SSharpType elemType = gt.TypeArgs.Count > 0 ? gt.TypeArgs[0] : SSharpType.Any;
-                            switch (memberAccess.Member)
-                            {
-                                case "size":
-                                    return SSharpType.Int;
-                                case "isEmpty":
-                                    return SSharpType.Boolean;
-                                case "contains":
-                                    return SSharpType.Boolean;
-                                case "incl" or "excl" or "union" or "intersect" or "diff" or "filter":
-                                    return receiverType;
-                                case "flatMap":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argTypeSet) &&
-                                        argTypeSet is FunctionType ftSet)
-                                    {
-                                        if (ftSet.ReturnType is GenericType returnGt && returnGt.Name == "Set" && returnGt.TypeArgs.Count > 0)
-                                        {
-                                            return new GenericType("Set", new List<SSharpType> { returnGt.TypeArgs[0] });
-                                        }
-                                        return ftSet.ReturnType;
-                                    }
-                                    return new GenericType("Set", new List<SSharpType> { SSharpType.Any });
-                                case "flatten":
-                                    if (elemType is GenericType innerSetGt && innerSetGt.Name == "Set" && innerSetGt.TypeArgs.Count > 0)
-                                    {
-                                        return new GenericType("Set", new List<SSharpType> { innerSetGt.TypeArgs[0] });
-                                    }
-                                    return new GenericType("Set", new List<SSharpType> { SSharpType.Any });
-                                case "toList":
-                                    return new GenericType("List", new List<SSharpType> { elemType });
-                            }
-                        }
-                        else if (gt.Name == "Map")
-                        {
-                            SSharpType keyType = gt.TypeArgs.Count > 0 ? gt.TypeArgs[0] : SSharpType.Any;
-                            SSharpType valType = gt.TypeArgs.Count > 1 ? gt.TypeArgs[1] : SSharpType.Any;
-                            switch (memberAccess.Member)
-                            {
-                                case "size":
-                                    return SSharpType.Int;
-                                case "isEmpty":
-                                    return SSharpType.Boolean;
-                                case "contains":
-                                    return SSharpType.Boolean;
-                                case "get":
-                                    return new GenericType("Option", new List<SSharpType> { valType });
-                                case "apply":
-                                    return valType;
-                                case "updated" or "removed" or "filter":
-                                    return receiverType;
-                                case "flatMap":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argTypeMap) &&
-                                        argTypeMap is FunctionType ftMap)
-                                    {
-                                        if (ftMap.ReturnType is GenericType returnGt && returnGt.Name == "Map" && returnGt.TypeArgs.Count == 2)
-                                        {
-                                            return new GenericType("Map", new List<SSharpType> { returnGt.TypeArgs[0], returnGt.TypeArgs[1] });
-                                        }
-                                        return ftMap.ReturnType;
-                                    }
-                                    return new GenericType("Map", new List<SSharpType> { SSharpType.Any, SSharpType.Any });
-                                case "keys":
-                                    return new GenericType("Set", new List<SSharpType> { keyType });
-                                case "values":
-                                    return new GenericType("List", new List<SSharpType> { valType });
-                                case "toList":
-                                    return new GenericType("List", new List<SSharpType> { new GenericType("Tuple2", new List<SSharpType> { keyType, valType }) });
-                            }
-                        }
-                        else if (gt.Name == "Option" || gt.Name == "Some" || gt.Name == "None")
-                        {
-                            SSharpType elemType = gt.TypeArgs.Count > 0 ? gt.TypeArgs[0] : SSharpType.Any;
-                            switch (memberAccess.Member)
-                            {
-                                case "isDefined" or "isEmpty":
-                                    return SSharpType.Boolean;
-                                case "get":
-                                    return elemType;
-                                case "getOrElse":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0)
-                                    {
-                                        return CheckExpr(memberAccess.Arguments[0]);
-                                    }
-                                    return elemType;
-                                case "filter":
-                                    return new GenericType("Option", new List<SSharpType> { elemType });
-                                case "map":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argType) &&
-                                        argType is FunctionType ft)
-                                    {
-                                        return new GenericType("Option", new List<SSharpType> { ft.ReturnType });
-                                    }
-                                    return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
-                                case "flatMap":
-                                    if (memberAccess.Arguments != null && memberAccess.Arguments.Count > 0 &&
-                                        ResolvedTypes.TryGetValue(memberAccess.Arguments[0], out var argType2) &&
-                                        argType2 is FunctionType ft2)
-                                    {
-                                        if (ft2.ReturnType is GenericType returnGt && (returnGt.Name == "Option" || returnGt.Name == "Some" || returnGt.Name == "None") && returnGt.TypeArgs.Count > 0)
-                                        {
-                                            return new GenericType("Option", new List<SSharpType> { returnGt.TypeArgs[0] });
-                                        }
-                                        return ft2.ReturnType;
-                                    }
-                                    return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
-                                case "flatten":
-                                    if (elemType is GenericType innerOptionGt && (innerOptionGt.Name == "Option" || innerOptionGt.Name == "Some" || innerOptionGt.Name == "None") && innerOptionGt.TypeArgs.Count > 0)
-                                    {
-                                        return new GenericType("Option", new List<SSharpType> { innerOptionGt.TypeArgs[0] });
-                                    }
-                                    return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
-                            }
-                        }
+                        Error(memberAccess.Line, memberAccess.Column,
+                            $"Methods on objects are not supported in SSharp (found '{memberAccess.Member}(...)'). SSharp is purely functional; use free functions instead (e.g. {memberAccess.Member}(..., receiver)).");
+                        return SSharpType.Any;
                     }
 
-                    // Case class field access: resolve field type from class declaration
                     if (receiverType is PrimitiveType pt && _classes.TryGetValue(pt.Name, out var receiverClass))
                     {
                         var field = receiverClass.ConstructorParams.FirstOrDefault(p => p.Name == memberAccess.Member);
                         if (field != null)
                             return ResolveType(field.Type);
                     }
+                    else if (receiverType is GenericType gt && _classes.TryGetValue(gt.Name, out var receiverGenericClass))
+                    {
+                        var field = receiverGenericClass.ConstructorParams.FirstOrDefault(p => p.Name == memberAccess.Member);
+                        if (field != null)
+                        {
+                            var fieldType = ResolveType(field.Type);
+                            var typeMap = new Dictionary<string, SSharpType>();
+                            for (int i = 0; i < Math.Min(receiverGenericClass.TypeParams.Count, gt.TypeArgs.Count); i++)
+                            {
+                                typeMap[receiverGenericClass.TypeParams[i].Name] = gt.TypeArgs[i];
+                            }
+                            return InstantiateType(fieldType, typeMap);
+                        }
+                    }
 
+                    Error(memberAccess.Line, memberAccess.Column,
+                        $"Member '{memberAccess.Member}' not found on type '{receiverType}'. SSharp does not have instance methods; use free functions instead.");
                     return SSharpType.Any;
                 }
 
@@ -1135,6 +1040,50 @@ public class TypeChecker
         }
 
         return SSharpType.Any;
+    }
+
+    /// <summary>
+    /// Unifies an expected pattern type with an actual type, populating the type substitutions map.
+    /// </summary>
+    private bool MatchType(SSharpType expectedPattern, SSharpType actual, System.Collections.Generic.Dictionary<string, SSharpType> typeSubst)
+    {
+        if (expectedPattern == SSharpType.Any || actual == SSharpType.Any) return true;
+        if (expectedPattern is ByNameType bt) expectedPattern = bt.UnderType;
+        if (actual is ByNameType ba) actual = ba.UnderType;
+
+        // If expectedPattern is a type variable (e.g. single uppercase letter "A", "B", "T", etc.)
+        if (expectedPattern is PrimitiveType pt && pt.Name.Length == 1 && char.IsUpper(pt.Name[0]))
+        {
+            if (typeSubst.TryGetValue(pt.Name, out var existing))
+            {
+                return IsSubtype(actual, existing) || IsSubtype(existing, actual);
+            }
+            typeSubst[pt.Name] = actual;
+            return true;
+        }
+
+        if (expectedPattern is FunctionType expFt && actual is FunctionType actFt)
+        {
+            if (expFt.ParamTypes.Count != actFt.ParamTypes.Count) return false;
+            for (int i = 0; i < expFt.ParamTypes.Count; i++)
+            {
+                if (!MatchType(expFt.ParamTypes[i], actFt.ParamTypes[i], typeSubst)) return false;
+            }
+            return MatchType(expFt.ReturnType, actFt.ReturnType, typeSubst);
+        }
+
+        if (expectedPattern is GenericType expGt && actual is GenericType actGt)
+        {
+            if (expGt.Name != actGt.Name || expGt.TypeArgs.Count != actGt.TypeArgs.Count) return false;
+            for (int i = 0; i < expGt.TypeArgs.Count; i++)
+            {
+                if (!MatchType(expGt.TypeArgs[i], actGt.TypeArgs[i], typeSubst)) return false;
+            }
+            return true;
+        }
+
+        if (expectedPattern.Equals(actual)) return true;
+        return IsSubtype(actual, expectedPattern);
     }
 
     /// <summary>

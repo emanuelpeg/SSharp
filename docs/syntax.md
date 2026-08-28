@@ -168,7 +168,7 @@ val multiply = (x: Int, y: Int) => x * y
 
 // Passing a lambda to a higher-order function
 val list = List(1, 2, 3, 4)
-val doubled = list.map((x: Int) => x * 2)
+val doubled = map((x: Int) => x * 2, list)
 ```
 
 ---
@@ -330,21 +330,39 @@ import "SSharp.Runtime"
 - `head[T](list: List[T]): T`: Returns the first element of a non-empty list.
 - `tail[T](list: List[T]): List[T]`: Returns the rest of a non-empty list (excluding the first element).
 
-### Higher-Order Methods on Collections
+### Higher-Order Free Functions on Collections
 
-SSharp's immutable lists and collections include standard functional methods:
+SSharp is 100% purely functional: operations on collections are pure free functions provided in the Prelude:
 
 ```scala
 val numbers = List(1, 2, 3, 4, 5)
 
 // map: Transforms each element
-val doubles = numbers.map((x: Int) => x * 2)
+val doubles = map((x: Int) => x * 2, numbers)
 
 // filter: Filters elements according to a predicate
-val evens = numbers.filter((x: Int) => x % 2 == 0)
+val evens = filter((x: Int) => x % 2 == 0, numbers)
 
 // foldLeft: Reduces the list by accumulating a value from the left
-val total = numbers.foldLeft(0, (acc: Int, x: Int) => acc + x)
+val total = foldLeft(0, (acc: Int, x: Int) => acc + x, numbers)
+
+// length / size: List inspection
+val len = length(numbers)
+
+// contains: Checks if an element is in the list
+val hasThree = contains(3, numbers)
+```
+
+### Pipe Operator (`|>`)
+
+SSharp includes the forward pipe operator `|>` to chain data transformations left-to-right:
+
+```scala
+val result = List(1, 2, 3, 4, 5, 6)
+    |> filter((n: Int) => n % 2 == 0)
+    |> map((n: Int) => n * 10)
+    |> sum
+// result = 120
 ```
 
 ---

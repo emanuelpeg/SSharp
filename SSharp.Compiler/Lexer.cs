@@ -77,6 +77,9 @@ public class Lexer
                 return MakeToken(TokenType.Minus);
             case '*': return MakeToken(TokenType.Asterisk);
             case '%': return MakeToken(TokenType.Percent);
+            case '|':
+                if (Match('>')) return MakeToken(TokenType.Pipe);
+                return MakeToken(TokenType.Error, null, "Unexpected character '|'");
 
             case '/':
                 if (Match('/'))

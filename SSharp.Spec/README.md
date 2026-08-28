@@ -128,8 +128,9 @@ Assert.Equal(csResult.Output, ssResult.Output);
 | `043_function_composition_and_pipeline` | Build complex data processing pipelines by chaining simple pure functions. | Higher-order functional combinators `compose(f, g)` and `andThen(f, g)`. |
 | `044_lazy_call_by_name_short_circuit` | Create custom control flow constructs that only evaluate chosen branches. | Call-by-name parameters (`=> Type`) ensuring true short-circuiting of side-effects. |
 | `045_peano_numbers_inductive_adt` | Formally model Peano arithmetic using inductive natural numbers. | Inductive Peano numbers (`Zero`, `Succ(n)`), recursive addition, and `Int` conversion. |
-| `046_either_result_error_handling` | Robust error handling with strict types without throwing runtime exceptions. | Typed `Result` ADT (`Success(v)` / `Failure(err)`) with pipeline error propagation. |
-| `047_higher_order_list_operations` | Standard immutable collection transformation idioms. | Functional list APIs: `List.map`, `List.filter`, `List.contains`, `List.size`. |
+| `047_higher_order_list_operations` | Standard immutable collection transformation idioms using pure free functions. | Pure free functions: `filter(p, xs)`, `map(f, xs)`, `size(xs)`, `contains(x, xs)`. |
+| `048_predef_free_functions` | Standard Prelude free functions for list inspection, transformation, and reduction. | Pure functional Prelude: `length`, `filter`, `map`, `foldLeft`, `reverse`, `take`, `contains`, `isEmpty`. |
+| `049_pipe_operator` | Left-to-right functional pipeline composition with pipe operator (`\|>`). | Pipeline syntax: `xs \|> filter(p) \|> map(f) \|> sum`. |
 
 ---
 
