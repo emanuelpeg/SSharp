@@ -355,14 +355,26 @@ val tieneTres = contains(3, numeros)
 
 ### Operador Pipe (`|>`)
 
-SSharp incluye el operador pipe hacia adelante `|>` para encadenar transformaciones de izquierda a derecha de forma fluida:
+SSharp incluye el operador pipe hacia adelante `|>` para encadenar transformaciones de izquierda a derecha de forma fluida y sin anidamiento excesivo ni métodos OO:
 
 ```scala
-val resultado = List(1, 2, 3, 4, 5, 6)
+def isEven(n: Int): Boolean = n % 2 == 0
+def doubleIt(n: Int): Int = n * 2
+
+val xs = List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+
+val resultado = xs
+    |> filter(isEven)
+    |> map(doubleIt)
+    |> take(5)
+// resultado: List(4, 8, 12, 16, 20)
+
+// También con lambdas directas y reducción
+val total = List(1, 2, 3, 4, 5, 6)
     |> filter((n: Int) => n % 2 == 0)
     |> map((n: Int) => n * 10)
     |> sum
-// resultado = 120
+// total = 120
 ```
 
 ---

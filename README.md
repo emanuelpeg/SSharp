@@ -10,6 +10,7 @@ SSharp is a statically-typed, expression-based functional language that transpil
 
 - **Immutable bindings** with `val`
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
+- **Pipe operator (`|>`)** — forward data flow and composition without nested function calls or OO method chains
 - **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
 - **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, and **infix list `head::tail` patterns**)
 - **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
@@ -17,7 +18,7 @@ SSharp is a statically-typed, expression-based functional language that transpil
 - **Generic functions** and data types with **covariance (`+T`) and contravariance (`-T`)** — Scala-style variance annotations
 - **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
-- **Runtime library**: `List[A]` (singly-linked), `Option[A]`, and standard `print`/`println`/`readLine`
+- **Runtime library & Functional Prelude**: `List[A]` (singly-linked), `Option[A]`, `Set[A]`, `Map[K, V]`, pure higher-order free functions (`map`, `filter`, `take`, `drop`, `foldLeft`, `sum`), and standard `print`/`println`/`readLine`
 - **Stateless Eval API** — REST (`POST /api/eval`) & gRPC (`ssharp.EvalService/Eval`) with automatic `typeInfo` resolution
 - **Rust-style compiler diagnostics** — informative formatting pinpointing file, line, and column for errors
 - **Transpiles to C#** — output is clean, human-readable C# source code
@@ -36,6 +37,7 @@ SSharp/
 ├── SSharp.CLI/          # Command-line compiler driver
 ├── SSharp.Spec/         # Language specification test suite (47+ verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
+├── Sample/              # Sample programs (hello.ss, pipe.ss, collections.ss, etc.)
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
 ```
 
@@ -287,6 +289,25 @@ def length[A](list: List[A]): Int = list match {
     case head::tail => 1 + length(tail)
 }
 ```
+
+### Composition & Pipe Operator (`|>`)
+
+In accordance with SSharp's *Pure Functions & Data First* philosophy, operations over collections and values are pure free functions rather than object-oriented instance methods. The forward pipe operator (`|>`) allows chaining transformations cleanly from left to right without excessive nesting:
+
+```scala
+def isEven(n: Int): Boolean = n % 2 == 0
+def doubleIt(n: Int): Int = n * 2
+
+val xs = List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+
+val resultado = xs
+    |> filter(isEven)
+    |> map(doubleIt)
+    |> take(5)
+// resultado: List(4, 8, 12, 16, 20)
+```
+
+The pipe operator desugars `x |> f` into `f(x)` and `x |> f(args...)` into `f(args..., x)`, passing the piped value as the final argument. This allows chaining pure Prelude functions such as `filter`, `map`, `take`, `drop`, `foldLeft`, and `sum` into clear, readable pipelines.
 
 ---
 

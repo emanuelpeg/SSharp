@@ -355,14 +355,26 @@ val hasThree = contains(3, numbers)
 
 ### Pipe Operator (`|>`)
 
-SSharp includes the forward pipe operator `|>` to chain data transformations left-to-right:
+SSharp includes the forward pipe operator `|>` to chain data transformations left-to-right without excessive nesting or OO methods:
 
 ```scala
-val result = List(1, 2, 3, 4, 5, 6)
+def isEven(n: Int): Boolean = n % 2 == 0
+def doubleIt(n: Int): Int = n * 2
+
+val xs = List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+
+val resultado = xs
+    |> filter(isEven)
+    |> map(doubleIt)
+    |> take(5)
+// resultado: List(4, 8, 12, 16, 20)
+
+// Also with inline lambdas and reductions
+val total = List(1, 2, 3, 4, 5, 6)
     |> filter((n: Int) => n % 2 == 0)
     |> map((n: Int) => n * 10)
     |> sum
-// result = 120
+// total = 120
 ```
 
 ---
