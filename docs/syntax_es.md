@@ -269,7 +269,8 @@ def describirFigura(f: Figura): String = f match {
 2. **Patrón Literal**: Coincide con valores concretos (`42`, `"hola"`, `true`).
 3. **Patrón de Identificador / Variable**: Captura el valor en una variable local.
 4. **Patrón de Constructor**: Desestructura una `case class`.
-5. **Patrón Infijo de Lista (`head :: tail`)**: Separa la cabeza y la cola de una lista.
+5. **Patrón de Tupla (`(p1, p2, ...)` )**: Desestructura los elementos posicionales de una tupla.
+6. **Patrón Infijo de Lista (`head :: tail`)**: Separa la cabeza y la cola de una lista.
 
 ```scala
 def procesar(x: Any): String = x match {

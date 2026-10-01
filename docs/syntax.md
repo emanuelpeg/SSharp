@@ -269,7 +269,8 @@ def describeShape(s: Shape): String = s match {
 2. **Literal Pattern**: Matches concrete values (`42`, `"hello"`, `true`).
 3. **Identifier / Variable Pattern**: Captures the value into a local variable.
 4. **Constructor Pattern**: Destructures a `case class`.
-5. **Infix List Pattern (`head :: tail`)**: Separates the head and tail of a list.
+5. **Tuple Pattern (`(p1, p2, ...)` )**: Destructures n-ary tuples positional elements.
+6. **Infix List Pattern (`head :: tail`)**: Separates the head and tail of a list.
 
 ```scala
 def process(x: Any): String = x match {
