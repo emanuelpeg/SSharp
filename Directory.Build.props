@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/emanuelpeg/SSharp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/emanuelpeg/SSharp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)assets\icon.png" Pack="true" PackagePath="\" Visible="false" Condition="Exists('$(MSBuildThisFileDirectory)assets\icon.png')" />
+  </ItemGroup>
+</Project>

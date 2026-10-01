@@ -4,6 +4,7 @@
   "description": "Syntax highlighting and language support for SSharp",
   "version": "0.1.0",
   "publisher": "ssharp",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.75.0"
   },
