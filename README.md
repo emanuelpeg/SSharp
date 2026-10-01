@@ -1,8 +1,25 @@
-# SSharp
+<p align="center">
+  <a href="https://github.com/emanuelpeg/SSharp">
+    <img src="./assets/ssharp.jpeg" alt="SSharp Logo" width="180" />
+  </a>
+</p>
 
-**SSharp** — Functional Programming for the CLR.
+<h1 align="center">SSharp</h1>
 
-SSharp is a statically-typed, expression-based functional language that transpiles to C# and runs on the .NET runtime. Inspired by the functional subset of Scala, SSharp features algebraic data types, pattern matching, immutable bindings, and higher-order functions — all compiled down to idiomatic C# records and switch expressions.
+<p align="center">
+  <strong>Functional Programming for the CLR</strong><br>
+  <em>Statically-typed • Expression-based • Transpiles to idiomatic C#</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/emanuelpeg/SSharp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://dotnet.microsoft.com/download"><img src="https://img.shields.io/badge/.NET-10.0-purple.svg" alt=".NET 10.0"></a>
+  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-50%20passing-brightgreen.svg" alt="Spec Tests"></a>
+</p>
+
+---
+
+**SSharp** is a statically-typed, expression-based functional language that transpiles to C# and runs on the .NET runtime. Inspired by the functional subset of Scala, SSharp features algebraic data types, pattern matching, immutable bindings, and higher-order functions — all compiled down to idiomatic C# records and switch expressions.
 
 ---
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp Language Syntax Reference
 
 **SSharp** is a statically-typed, expression-based functional programming language that transpiles to executable C# on the .NET runtime. Inspired by the functional subset of Scala, it combines the expressiveness of the functional paradigm with the interoperability and performance of the .NET runtime.

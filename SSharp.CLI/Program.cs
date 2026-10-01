@@ -490,9 +490,21 @@ public static class Program
 
     private static void PrintReplBanner(string version)
     {
+        Console.ForegroundColor = ConsoleColor.Magenta;
+        Console.WriteLine(@"  _____ _____ _                      ");
+        Console.WriteLine(@" / ____/ ____| |                     ");
+        Console.WriteLine(@"| (___| (___ | |__   __ _ _ __ _ __  ");
+        Console.WriteLine(@" \___ \\___ \| '_ \ / _` | '__| '_ \ ");
+        Console.WriteLine(@" ____) |___) | | | | (_| | |  | |_) |");
+        Console.WriteLine(@"|_____/_____/|_| |_|\__,_|_|  | .__/ ");
+        Console.WriteLine(@"                              | |    ");
+        Console.WriteLine(@"                              |_|    ");
+        Console.ForegroundColor = ConsoleColor.DarkMagenta;
+        Console.WriteLine("  Functional Programming for the CLR");
         Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"SSharp REPL v{version}  (.NET {Environment.Version})");
+        Console.WriteLine($"  REPL v{version}  (.NET {Environment.Version})");
         Console.ResetColor();
+        Console.WriteLine();
         Console.WriteLine("Type :help for available commands, :quit to exit.");
         Console.WriteLine();
     }

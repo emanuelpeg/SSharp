@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # Guía Completa de la Sintaxis de SSharp
 
 **SSharp** es un lenguaje de programación funcional, estáticamente tipado y basado en expresiones que transpila a C# ejecutable sobre la plataforma .NET. Inspirado en el subconjunto funcional de Scala, combina la expresividad del paradigma funcional con la interoperabilidad y el rendimiento de la runtime de .NET.

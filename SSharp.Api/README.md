@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp.Api
 
 Stateless evaluation API for the SSharp language, exposing two transports over the same port:

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp VS Code Extension
 
 Official Visual Studio Code extension for **SSharp** — a statically-typed, expression-based functional programming language that transpiles to C#.

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp.Spec — Language Specification and Test Suite
 
 > *Looking for Spanish documentation? See [README_es.md](README_es.md).*

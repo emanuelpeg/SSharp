@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp — Roadmap hacia un Lenguaje 100% Funcional Puro (TODO)
 
 ## 🌿 Filosofía de Diseño: *Pure Functions & Data First*

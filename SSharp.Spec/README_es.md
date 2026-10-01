@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../assets/ssharp.jpeg" alt="SSharp Logo" width="130" />
+</p>
+
 # SSharp.Spec — Suite de Especificación y Tests del Lenguaje
 
 La suite **SSharp.Spec** define la especificación formal y ejecutable del lenguaje **SSharp**. Cada caso de prueba valida el pipeline completo del compilador (`Lexer` → `Parser` → `TypeChecker` → `CodeGenerator` → `EvalBackend`), comparando la salida de ejecución del código fuente `.ss` contra un programa de referencia en C# `.cs`.
