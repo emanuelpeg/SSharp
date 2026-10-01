@@ -471,7 +471,7 @@ public class CodeGenerator
                 }
                 if (lit.Type == TokenType.DoubleLiteral)
                 {
-                    return lit.Value?.ToString() + "d";
+                    return Convert.ToString(lit.Value, System.Globalization.CultureInfo.InvariantCulture) + "d";
                 }
                 if (lit.Type == TokenType.True) return "true";
                 if (lit.Type == TokenType.False) return "false";
@@ -479,6 +479,25 @@ public class CodeGenerator
 
             case UnitExpr:
                 return "SSharp.Runtime.Unit.Instance";
+
+            case TupleExpr tup:
+                {
+                    int arity = tup.Elements.Count;
+                    var typeArgs = new List<string>();
+                    if (_resolvedTypes.TryGetValue(tup, out var tupType) && tupType is GenericType gt && gt.TypeArgs.Count == arity)
+                    {
+                        typeArgs = gt.TypeArgs.Select(MapType).ToList();
+                    }
+                    var elemStrs = tup.Elements.Select(GenerateExpr);
+                    if (typeArgs.Count == arity)
+                    {
+                        return $"new SSharp.Runtime.SSharpTuple{arity}<{string.Join(", ", typeArgs)}>({string.Join(", ", elemStrs)})";
+                    }
+                    else
+                    {
+                        return $"Tuple{arity}({string.Join(", ", elemStrs)})";
+                    }
+                }
 
             case IdentifierExpr id:
                 if (IsLazyParam(id.Name))
@@ -863,8 +882,68 @@ public class CodeGenerator
                             return $"SSharp.Runtime.{cons.Name}<{typeArgStr}>({string.Join(", ", subPatternsStrs)})";
                         }
 
+                        if (cons.Name.StartsWith("Tuple"))
+                        {
+                            int arity = cons.SubPatterns.Count;
+                            var typeArgs = new List<string>();
+                            var elemTypes = new List<SSharpType>();
+                            if (matchedType is GenericType gt && gt.Name == cons.Name && gt.TypeArgs.Count == arity)
+                            {
+                                for (int i = 0; i < arity; i++)
+                                {
+                                    typeArgs.Add(MapType(gt.TypeArgs[i]));
+                                    elemTypes.Add(gt.TypeArgs[i]);
+                                }
+                            }
+                            else
+                            {
+                                for (int i = 0; i < arity; i++)
+                                {
+                                    typeArgs.Add("object");
+                                    elemTypes.Add(SSharpType.Any);
+                                }
+                            }
+
+                            var subPatternsStrs = new List<string>();
+                            for (int i = 0; i < arity; i++)
+                            {
+                                subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[i], elemTypes[i]));
+                            }
+                            return $"SSharp.Runtime.SSharp{cons.Name}<{string.Join(", ", typeArgs)}>({string.Join(", ", subPatternsStrs)})";
+                        }
+
                         return cons.Name;
                     }
+                }
+
+            case TuplePattern tupPat:
+                {
+                    int arity = tupPat.Elements.Count;
+                    var typeArgs = new List<string>();
+                    var elemTypes = new List<SSharpType>();
+                    if (matchedType is GenericType gt && (gt.Name == $"Tuple{arity}" || gt.Name == "Tuple" + arity) && gt.TypeArgs.Count == arity)
+                    {
+                        for (int i = 0; i < arity; i++)
+                        {
+                            typeArgs.Add(MapType(gt.TypeArgs[i]));
+                            elemTypes.Add(gt.TypeArgs[i]);
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < arity; i++)
+                        {
+                            typeArgs.Add("object");
+                            elemTypes.Add(SSharpType.Any);
+                        }
+                    }
+
+                    var subPatternsStrs = new List<string>();
+                    for (int i = 0; i < arity; i++)
+                    {
+                        subPatternsStrs.Add(GeneratePattern(tupPat.Elements[i], elemTypes[i]));
+                    }
+                    return $"SSharp.Runtime.SSharpTuple{arity}<{string.Join(", ", typeArgs)}>({string.Join(", ", subPatternsStrs)})";
                 }
 
             default:
@@ -929,7 +1008,7 @@ public class CodeGenerator
                 "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
-                "Tuple2" => $"SSharp.Runtime.SSharpTuple2<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Tuple2" or "Tuple3" or "Tuple4" or "Tuple5" or "Tuple6" or "Tuple7" or "Tuple8" => $"SSharp.Runtime.SSharp{gt.Name}<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 _ => $"{gt.Name}<{string.Join(", ", gt.TypeArgs.Select(MapType))}>"
             },
             FunctionType ft => ft.ParamTypes.Count == 0 
@@ -964,7 +1043,7 @@ public class CodeGenerator
             "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
-            "Tuple2" => $"SSharp.Runtime.SSharpTuple2<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Tuple2" or "Tuple3" or "Tuple4" or "Tuple5" or "Tuple6" or "Tuple7" or "Tuple8" => $"SSharp.Runtime.SSharp{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Fun" => node.TypeArgs.Count switch
             {
                 0 => "System.Action",

@@ -42,7 +42,7 @@ SSharp posee un sistema de tipos estático con inferencia de tipos automática.
 - **Opciones**: `Option[A]`
 - **Conjuntos**: `Set[A]`
 - **Mapas**: `Map[K, V]`
-- **Tuplas**: `Tuple2[A, B]`
+- **Tuplas**: `(A, B, ...)` / `Tuple2[A, B]` a `Tuple8[...]`
 - **Funciones**: `(A, B) => C` (función que toma argumentos de tipo `A` y `B` y retorna `C`)
 
 ---
@@ -306,6 +306,25 @@ val l2 = 1 :: 2 :: 3 :: Nil
 def sumarElementos(lista: List[Int]): Int = lista match {
     case Nil        => 0
     case head::tail => head + sumarElementos(tail)
+}
+```
+
+### Tuplas Literales N-arias (`Tuple2` - `Tuple8`)
+
+SSharp soporta tuplas heterogéneas desde aridad 2 hasta 8 con sintaxis literal nativa, tipos `(T1, T2, ...)` y deconstrucción en pattern matching:
+
+```scala
+// Creación y anotación de tipos:
+val persona: (String, Int, Boolean) = ("Alice", 25, true)
+
+// Acceso posicional a campos (_1, _2, _3):
+println(persona._1) // "Alice"
+println(persona._2) // 25
+println(persona._3) // true
+
+// Deconstrucción en pattern matching:
+def format(t: (String, Int)): String = t match {
+    case (nombre, edad) => nombre + " tiene " + edad + " años"
 }
 ```
 

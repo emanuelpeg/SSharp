@@ -78,6 +78,8 @@ public record MatchExpr(Expr Expression, List<MatchCase> Cases, int Line, int Co
 /// </summary>
 public record MemberAccessExpr(Expr Receiver, string Member, List<TypeNode> TypeArgs, List<Expr>? Arguments, int Line, int Column) : Expr;
 
+public record TupleExpr(List<Expr> Elements, int Line, int Column) : Expr;
+
 
 // Patterns and Match Cases
 public record MatchCase(Pattern Pattern, Expr Body, int Line, int Column);
@@ -91,3 +93,5 @@ public record LiteralPattern(object? Value, TokenType Type, int Line, int Column
 public record IdentifierPattern(string Name, int Line, int Column) : Pattern;
 
 public record ConstructorPattern(string Name, List<Pattern> SubPatterns, int Line, int Column) : Pattern;
+
+public record TuplePattern(List<Pattern> Elements, int Line, int Column) : Pattern;

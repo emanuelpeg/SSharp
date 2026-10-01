@@ -69,7 +69,12 @@ public class Lexer
             case ',': return MakeToken(TokenType.Comma);
             case '.': return MakeToken(TokenType.Dot);
             case ';': return MakeToken(TokenType.Semicolon);
-            case '_': return MakeToken(TokenType.Underscore);
+            case '_':
+                if (IsAlphaNumeric(Peek()))
+                {
+                    return ScanIdentifier();
+                }
+                return MakeToken(TokenType.Underscore);
             
             case '+': return MakeToken(TokenType.Plus);
             case '-':

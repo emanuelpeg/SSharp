@@ -130,10 +130,17 @@ public class TypeChecker
         // Register Map factory
         _env.Define("Map", new PrimitiveType("MapFactory"));
 
-        // Register Tuple2 factory: Tuple2[A,B](A, B) => Tuple2[A,B]
-        var tuple2ParamTypes = new List<SSharpType> { new PrimitiveType("A"), new PrimitiveType("B") };
-        var tuple2RetType = new GenericType("Tuple2", new List<SSharpType> { new PrimitiveType("A"), new PrimitiveType("B") });
-        _env.Define("Tuple2", new FunctionType(tuple2ParamTypes, tuple2RetType));
+        // Register Tuple2 - Tuple8 factories
+        for (int arity = 2; arity <= 8; arity++)
+        {
+            var tupleParams = new List<SSharpType>();
+            for (int i = 0; i < arity; i++)
+            {
+                tupleParams.Add(new PrimitiveType(((char)('A' + i)).ToString()));
+            }
+            var tupleRet = new GenericType($"Tuple{arity}", tupleParams);
+            _env.Define($"Tuple{arity}", new FunctionType(tupleParams, tupleRet));
+        }
 
         // Register Option factory
         _env.Define("Option", new PrimitiveType("OptionFactory"));
@@ -397,6 +404,20 @@ public class TypeChecker
 
             case UnitExpr:
                 return SSharpType.Unit;
+
+            case TupleExpr tup:
+                {
+                    if (tup.Elements.Count < 2 || tup.Elements.Count > 8)
+                    {
+                        Error(tup.Line, tup.Column, $"Tuples must have between 2 and 8 elements, got {tup.Elements.Count}.");
+                    }
+                    var elemTypes = new List<SSharpType>();
+                    foreach (var elem in tup.Elements)
+                    {
+                        elemTypes.Add(CheckExpr(elem));
+                    }
+                    return new GenericType($"Tuple{tup.Elements.Count}", elemTypes);
+                }
 
             case IdentifierExpr id:
                 // 'null' is a special built-in literal
@@ -776,6 +797,15 @@ public class TypeChecker
                         }
                     }
 
+                    if (receiverType is GenericType gtTuple && gtTuple.Name.StartsWith("Tuple") &&
+                        memberAccess.Member.StartsWith("_") && int.TryParse(memberAccess.Member.Substring(1), out int tupleIdx))
+                    {
+                        if (tupleIdx >= 1 && tupleIdx <= gtTuple.TypeArgs.Count)
+                        {
+                            return gtTuple.TypeArgs[tupleIdx - 1];
+                        }
+                    }
+
                     Error(memberAccess.Line, memberAccess.Column,
                         $"Member '{memberAccess.Member}' not found on type '{receiverType}'. SSharp does not have instance methods; use free functions instead.");
                     return SSharpType.Any;
@@ -853,7 +883,34 @@ public class TypeChecker
                         BindPatternVariables(consPat.SubPatterns[i], resolvedParamType);
                     }
                 }
+                else if (consPat.Name.StartsWith("Tuple") && type is GenericType tupGt && tupGt.Name == consPat.Name)
+                {
+                    for (int i = 0; i < Math.Min(consPat.SubPatterns.Count, tupGt.TypeArgs.Count); i++)
+                    {
+                        BindPatternVariables(consPat.SubPatterns[i], tupGt.TypeArgs[i]);
+                    }
+                }
                 break;
+
+            case TuplePattern tupPat:
+                {
+                    int arity = tupPat.Elements.Count;
+                    if (type is GenericType gt && (gt.Name == $"Tuple{arity}" || gt.Name == "Tuple" + arity))
+                    {
+                        for (int i = 0; i < Math.Min(arity, gt.TypeArgs.Count); i++)
+                        {
+                            BindPatternVariables(tupPat.Elements[i], gt.TypeArgs[i]);
+                        }
+                    }
+                    else
+                    {
+                        for (int i = 0; i < arity; i++)
+                        {
+                            BindPatternVariables(tupPat.Elements[i], SSharpType.Any);
+                        }
+                    }
+                    break;
+                }
         }
     }
 
@@ -871,12 +928,16 @@ public class TypeChecker
         if (node.Name == "Unit") return SSharpType.Unit;
         if (node.Name == "Any") return SSharpType.Any;
 
-        // Function type: Fun[ParamType, ReturnType]
-        if (node.Name == "Fun" && node.TypeArgs.Count == 2)
+        // Function type: Fun[ParamTypes..., ReturnType]
+        if (node.Name == "Fun" && node.TypeArgs.Count >= 2)
         {
-            var paramType = ResolveType(node.TypeArgs[0]);
-            var retType = ResolveType(node.TypeArgs[1]);
-            return new FunctionType(new List<SSharpType> { paramType }, retType);
+            var paramTypes = new List<SSharpType>();
+            for (int i = 0; i < node.TypeArgs.Count - 1; i++)
+            {
+                paramTypes.Add(ResolveType(node.TypeArgs[i]));
+            }
+            var retType = ResolveType(node.TypeArgs[^1]);
+            return new FunctionType(paramTypes, retType);
         }
 
         var args = new List<SSharpType>();
@@ -936,6 +997,15 @@ public class TypeChecker
                 return false;
             }
             if (subGt.TypeArgs.Count != superGt.TypeArgs.Count) return false;
+
+            if (subGt.Name.StartsWith("Tuple"))
+            {
+                for (int i = 0; i < subGt.TypeArgs.Count; i++)
+                {
+                    if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i])) return false;
+                }
+                return true;
+            }
 
             List<TypeParam>? declaredParams = null;
             if (_traits.TryGetValue(subGt.Name, out var traitDecl))

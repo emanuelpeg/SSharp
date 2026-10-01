@@ -11,14 +11,15 @@ SSharp is a statically-typed, expression-based functional language that transpil
 - **Immutable bindings** with `val`
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Pipe operator (`|>`)** — forward data flow and composition without nested function calls or OO method chains
+- **N-ary Tuples (`(a, b, ...)`)** — native literal syntax for heterogeneous tuples (`Tuple2` to `Tuple8`), type annotations `(T1, T2, ...)`, positional access (`t._1`, `t._2`), and pattern matching deconstruction
 - **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
-- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, and **infix list `head::tail` patterns**)
+- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, tuple, and **infix list `head::tail` patterns**)
 - **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
 - **Generic functions** and data types with **covariance (`+T`) and contravariance (`-T`)** — Scala-style variance annotations
 - **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
-- **Runtime library & Functional Prelude**: `List[A]` (singly-linked), `Option[A]`, `Set[A]`, `Map[K, V]`, pure higher-order free functions (`map`, `filter`, `take`, `drop`, `foldLeft`, `sum`), and standard `print`/`println`/`readLine`
+- **Runtime library & Functional Prelude**: `List[A]`, `Option[A]`, `Set[A]`, `Map[K, V]`, `Tuple2`–`Tuple8`, pure higher-order free functions (`map`, `filter`, `take`, `drop`, `foldLeft`, `sum`), and standard `print`/`println`/`readLine`
 - **Stateless Eval API** — REST (`POST /api/eval`) & gRPC (`ssharp.EvalService/Eval`) with automatic `typeInfo` resolution
 - **Rust-style compiler diagnostics** — informative formatting pinpointing file, line, and column for errors
 - **Transpiles to C#** — output is clean, human-readable C# source code
@@ -30,14 +31,14 @@ SSharp is a statically-typed, expression-based functional language that transpil
 ```
 SSharp/
 ├── SSharp.Compiler/     # Lexer, Parser, TypeChecker, CodeGenerator
-├── SSharp.Runtime/      # Runtime library (List, Option, Set, Map, Tuple2, Unit, Predef)
+├── SSharp.Runtime/      # Runtime library (List, Option, Set, Map, Tuple2-Tuple8, Unit, Predef)
 ├── SSharp.Backend/      # Roslyn-based in-memory evaluator & .NET assembly compiler
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-├── SSharp.Spec/         # Language specification test suite (47+ verified FP cases)
+├── SSharp.Spec/         # Language specification test suite (50 verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
-├── Sample/              # Sample programs (hello.ss, pipe.ss, collections.ss, etc.)
+├── Sample/              # Sample programs (hello.ss, pipe.ss, tuples.ss, collections.ss, etc.)
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
 ```
 
@@ -311,6 +312,31 @@ The pipe operator desugars `x |> f` into `f(x)` and `x |> f(args...)` into `f(ar
 
 ---
 
+### N-ary Tuples (`Tuple2` - `Tuple8`)
+
+SSharp provides native literal syntax and type annotations for heterogeneous tuples from arity 2 up to 8, without needing nominal classes:
+
+```scala
+// Literal syntax and type annotations:
+val persona: (String, Int, Boolean) = ("Alice", 25, true)
+
+// Positional field access (_1, _2, _3):
+println(persona._1) // "Alice"
+println(persona._2) // 25
+println(persona._3) // true
+
+// Destructuring in functions and pattern matching:
+def format(t: (String, Int)): String = t match {
+    case (nombre, edad) => nombre + " tiene " + edad + " años"
+}
+
+val mensaje = format(("Bob", 30)) // "Bob tiene 30 años"
+```
+
+Tuples can also be constructed using generic factories `Tuple2(...)` through `Tuple8(...)` or types `Tuple2[A, B]` through `Tuple8[...]`. Under the hood, tuples are emitted as immutable C# records (`SSharpTuple2<...>` to `SSharpTuple8<...>`), providing automatic structural value equality, readable `ToString` formatting, and positional pattern deconstruction.
+
+---
+
 ### Generic Variance
 
 SSharp supports Scala-style variance annotations on type parameters. Use `+T` for **covariance** and `-T` for **contravariance**:
@@ -492,6 +518,9 @@ public static class Program
 | `Any`         | `object`                         |
 | `List[A]`     | `SSharp.Runtime.SSharpList<A>`   |
 | `Option[A]`   | `SSharp.Runtime.SSharpOption<A>` |
+| `(A, B)`      | `SSharp.Runtime.SSharpTuple2<A, B>` |
+| `(A, B, C)`   | `SSharp.Runtime.SSharpTuple3<A, B, C>` |
+| `(A1, ..., An)` (arities 2..8) | `SSharp.Runtime.SSharpTupleN<...>` |
 | `(A) => B`    | `System.Func<A, B>`              |
 
 ---

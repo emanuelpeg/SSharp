@@ -264,24 +264,59 @@ public class Parser
         {
             isLazy = true;
         }
-        Token name = Consume(TokenType.Identifier, "Expected type name.");
-        var typeArgs = new List<TypeNode>();
-        if (Match(TokenType.LBracket))
+
+        TypeNode baseType;
+        if (Match(TokenType.LParen))
         {
-            do
+            var types = new List<TypeNode>();
+            if (!Check(TokenType.RParen))
             {
-                typeArgs.Add(ParseType());
-            } while (Match(TokenType.Comma));
-            Consume(TokenType.RBracket, "Expected ']' after type arguments.");
+                do
+                {
+                    types.Add(ParseType());
+                } while (Match(TokenType.Comma));
+            }
+            Consume(TokenType.RParen, "Expected ')' after type list.");
+
+            if (types.Count == 0)
+            {
+                baseType = new TypeNode("Unit", new List<TypeNode>(), isLazy);
+            }
+            else if (types.Count == 1 && Peek().Type != TokenType.Arrow)
+            {
+                baseType = isLazy ? types[0] with { IsLazy = true } : types[0];
+            }
+            else if (Peek().Type == TokenType.Arrow)
+            {
+                Advance(); // consume '=>'
+                TypeNode retType = ParseType();
+                var funArgs = new List<TypeNode>(types) { retType };
+                return new TypeNode("Fun", funArgs, isLazy);
+            }
+            else
+            {
+                baseType = new TypeNode($"Tuple{types.Count}", types, isLazy);
+            }
         }
-        TypeNode baseType = new TypeNode(name.Lexeme, typeArgs, isLazy);
+        else
+        {
+            Token name = Consume(TokenType.Identifier, "Expected type name.");
+            var typeArgs = new List<TypeNode>();
+            if (Match(TokenType.LBracket))
+            {
+                do
+                {
+                    typeArgs.Add(ParseType());
+                } while (Match(TokenType.Comma));
+                Consume(TokenType.RBracket, "Expected ']' after type arguments.");
+            }
+            baseType = new TypeNode(name.Lexeme, typeArgs, isLazy);
+        }
 
         // Support function types: A => B
-        if (!isLazy && Peek().Type == TokenType.Arrow)
+        if (!isLazy && Match(TokenType.Arrow))
         {
-            Advance(); // consume '=>'
             TypeNode returnType = ParseType();
-            // Represent as Fun[paramType, returnType]
             return new TypeNode("Fun", new List<TypeNode> { baseType, returnType });
         }
         return baseType;
@@ -322,6 +357,16 @@ public class Parser
                     return new UnitExpr(token.Line, token.Column);
                 }
                 Expr expr = ParseExpression();
+                if (Match(TokenType.Comma))
+                {
+                    var elements = new List<Expr> { expr };
+                    do
+                    {
+                        elements.Add(ParseExpression());
+                    } while (Match(TokenType.Comma));
+                    Consume(TokenType.RParen, "Expected ')' after tuple elements.");
+                    return new TupleExpr(elements, token.Line, token.Column);
+                }
                 Consume(TokenType.RParen, "Expected ')' after expression.");
                 return expr;
 
@@ -536,6 +581,24 @@ public class Parser
                     {
                         return new IdentifierPattern(token.Lexeme, token.Line, token.Column);
                     }
+                }
+
+            case TokenType.LParen:
+                {
+                    var subPatterns = new List<Pattern>();
+                    if (!Check(TokenType.RParen))
+                    {
+                        do
+                        {
+                            subPatterns.Add(ParsePattern());
+                        } while (Match(TokenType.Comma));
+                    }
+                    Consume(TokenType.RParen, "Expected ')' after tuple pattern.");
+                    if (subPatterns.Count == 1)
+                    {
+                        return subPatterns[0];
+                    }
+                    return new TuplePattern(subPatterns, token.Line, token.Column);
                 }
 
             default:

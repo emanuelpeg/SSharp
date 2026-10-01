@@ -182,10 +182,28 @@ public static class Predef
     public static SSharpMap<K, V> Map<K, V>(params SSharpTuple2<K, V>[] entries) =>
         new SSharpMap<K, V>(entries);
 
-    // -- Tuple2 factory -------------------------------------------------------
+    // -- Tuple factories ------------------------------------------------------
 
-    /// <summary>Creates a Tuple2 pair. Used as map entries: Tuple2("key", value).</summary>
+    /// <summary>Creates a Tuple2 pair.</summary>
     public static SSharpTuple2<A, B> Tuple2<A, B>(A a, B b) => new SSharpTuple2<A, B>(a, b);
+
+    /// <summary>Creates a Tuple3 triplet.</summary>
+    public static SSharpTuple3<A, B, C> Tuple3<A, B, C>(A a, B b, C c) => new SSharpTuple3<A, B, C>(a, b, c);
+
+    /// <summary>Creates a Tuple4 quadruplet.</summary>
+    public static SSharpTuple4<A, B, C, D> Tuple4<A, B, C, D>(A a, B b, C c, D d) => new SSharpTuple4<A, B, C, D>(a, b, c, d);
+
+    /// <summary>Creates a Tuple5 quintuplet.</summary>
+    public static SSharpTuple5<A, B, C, D, E> Tuple5<A, B, C, D, E>(A a, B b, C c, D d, E e) => new SSharpTuple5<A, B, C, D, E>(a, b, c, d, e);
+
+    /// <summary>Creates a Tuple6 sextuplet.</summary>
+    public static SSharpTuple6<A, B, C, D, E, F> Tuple6<A, B, C, D, E, F>(A a, B b, C c, D d, E e, F f) => new SSharpTuple6<A, B, C, D, E, F>(a, b, c, d, e, f);
+
+    /// <summary>Creates a Tuple7 septuplet.</summary>
+    public static SSharpTuple7<A, B, C, D, E, F, G> Tuple7<A, B, C, D, E, F, G>(A a, B b, C c, D d, E e, F f, G g) => new SSharpTuple7<A, B, C, D, E, F, G>(a, b, c, d, e, f, g);
+
+    /// <summary>Creates a Tuple8 octuplet.</summary>
+    public static SSharpTuple8<A, B, C, D, E, F, G, H> Tuple8<A, B, C, D, E, F, G, H>(A a, B b, C c, D d, E e, F f, G g, H h) => new SSharpTuple8<A, B, C, D, E, F, G, H>(a, b, c, d, e, f, g, h);
 
     // -- Option factory -------------------------------------------------------
 
