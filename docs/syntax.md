@@ -42,7 +42,7 @@ SSharp has a static type system with automatic type inference.
 - **Options**: `Option[A]`
 - **Sets**: `Set[A]`
 - **Maps**: `Map[K, V]`
-- **Tuples**: `Tuple2[A, B]`
+- **Tuples**: `(A, B, ...)` / `Tuple2[A, B]` to `Tuple8[...]`
 - **Functions**: `(A, B) => C` (a function that takes arguments of type `A` and `B` and returns `C`)
 
 ---
@@ -306,6 +306,25 @@ val l2 = 1 :: 2 :: 3 :: Nil
 def sumElements(list: List[Int]): Int = list match {
     case Nil        => 0
     case head::tail => head + sumElements(tail)
+}
+```
+
+### N-ary Literal Tuples (`Tuple2` - `Tuple8`)
+
+SSharp supports heterogeneous tuples from arity 2 up to 8 with native literal syntax, `(T1, T2, ...)` types, and pattern matching destructuring:
+
+```scala
+// Construction and type annotation:
+val persona: (String, Int, Boolean) = ("Alice", 25, true)
+
+// Positional field access (_1, _2, _3):
+println(persona._1) // "Alice"
+println(persona._2) // 25
+println(persona._3) // true
+
+// Destructuring in pattern matching:
+def format(t: (String, Int)): String = t match {
+    case (nombre, edad) => nombre + " tiene " + edad + " años"
 }
 ```
 

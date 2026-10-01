@@ -131,6 +131,7 @@ Assert.Equal(csResult.Output, ssResult.Output);
 | `047_higher_order_list_operations` | Standard immutable collection transformation idioms using pure free functions. | Pure free functions: `filter(p, xs)`, `map(f, xs)`, `size(xs)`, `contains(x, xs)`. |
 | `048_predef_free_functions` | Standard Prelude free functions for list inspection, transformation, and reduction. | Pure functional Prelude: `length`, `filter`, `map`, `foldLeft`, `reverse`, `take`, `contains`, `isEmpty`. |
 | `049_pipe_operator` | Left-to-right functional pipeline composition with pipe operator (`\|>`). | Pipeline syntax: `xs \|> filter(p) \|> map(f) \|> sum`. |
+| `050_tuple_literals_and_matching` | Native heterogeneous N-ary tuples with literal syntax and pattern matching deconstruction. | Tuples `(a, b, c)`, types `(A, B, C)`, positional access `t._1`, `case (x, y) => ...`. |
 
 ---
 

@@ -25,7 +25,7 @@ A diferencia de los lenguajes híbridos orientados a objetos (como Scala o C#), 
 | **Paradigma** | 100% Funcional | Híbrido (funciones + métodos en runtime) | **100% Funciones Libres** | 🔄 En migración |
 | **Invocación de Operaciones** | `map f xs`, `length xs` | `map(f, xs)`, `length(xs)` | `map(f, xs)`, `length(xs)` | ✅ Completado |
 | **Operador Pipe (`\|>`)** | `&` (Data.Function) | `xs \|> f \|> g` | `xs \|> f \|> g` | ✅ Completado |
-| **Tuplas de Aridad N** | `(a, b, c, ...)` | Solo `Tuple2(a, b)` | `(a, b, c, ...)` nativo | **Prioridad 1** |
+| **Tuplas de Aridad N** | `(a, b, c, ...)` | `(a, b, c, ...)` nativo | `(a, b, c, ...)` nativo | ✅ Completado |
 | **Pattern Guards & As-Patterns** | `f x \| x > 0`, `xs@(x:rest)` | ❌ No disponible | `case x if x > 0 =>`, `case xs @ (h :: t) =>` | **Prioridad 1** |
 | **List / Monad Comprehensions** | `[x*2 \| x <- xs, x > 0]` | ❌ No disponible | `[f(x) \| x <- xs, cond(x)]` | **Prioridad 2** |
 | **Do-Notation / For-Comprehensions** | `do { x <- mx; return (x+1) }` | ❌ No disponible | `for { x <- xs } yield ...` (desugared to pure `flatMap`/`map`) | **Prioridad 2** |
@@ -183,7 +183,7 @@ gantt
   - `zipWith<A, B, C>(Func<A, B, C> f, SSharpList<A> xs, SSharpList<B> ys)`
   - `contains<T>(T elem, SSharpList<T> xs)`
   - `reverse<T>(SSharpList<T> xs)`
-- [ ] Implementar `Tuple3.cs` hasta `Tuple8.cs` y sus funciones constructoras `Tuple3(a, b, c)`.
+- [x] Implementar `Tuple3.cs` hasta `Tuple8.cs` y sus funciones constructoras `Tuple3(a, b, c)`.
 - [ ] Implementar `Either.cs` (`Left<L, R>`, `Right<L, R>`) con funciones libres `isLeft`, `isRight`, `mapEither`.
 
 #### 🔍 2. `SSharp.Compiler` (Parser & Lexer)
@@ -194,7 +194,7 @@ gantt
   - [ ] Agregar token `TypeAlias` (`type`).
 - [ ] **Parser**:
   - [x] Expresión Pipe: `lhs |> rhs` (asociativa por la izquierda).
-  - [ ] Tuplas literales: `(a, b, c)` en `ParsePrefix`.
+  - [x] Tuplas literales: `(a, b, c)` en `ParsePrefix`, tipos `(A, B, C)` en `ParseType` y patrones `case (a, b) =>` en `ParsePattern`.
   - [ ] Pattern Guards: `case pattern if cond => body` en `ParseMatchCase`.
   - [ ] As-Patterns: `name @ pattern` en `ParsePattern`.
   - [ ] Type Aliases: `type Name[T] = TargetType;`.
@@ -203,20 +203,20 @@ gantt
 #### 🧠 3. `SSharp.Compiler` (TypeChecker)
 - [x] Registrar todas las funciones libres del Prelude en el entorno inicial `_env`.
 - [x] Tipar la expresión `a |> f` como la aplicación de función `f(a)`.
-- [ ] Tipar tuplas `(a, b, c)` como `GenericType("TupleN", [Ta, Tb, Tc])`.
+- [x] Tipar tuplas `(a, b, c)` como `GenericType("TupleN", [Ta, Tb, Tc])` y soportar pattern matching y acceso `_1`..`_8`.
 - [ ] Validar guards booleanos en pattern matching en el scope de las variables ligadas.
 - [ ] Expandir Type Aliases transparentemente durante `ResolveType`.
 
 #### ⚡ 4. `SSharp.Compiler` (CodeGenerator)
 - [x] Traducir `a |> f` a llamada directa de función `f(a)` en C#.
-- [ ] Traducir tuplas literales `(a, b)` a `new SSharp.Runtime.SSharpTupleN<...>(...)`.
+- [x] Traducir tuplas literales `(a, b)` a `new SSharp.Runtime.SSharpTupleN<...>(...)` y pattern matching a deconstrucción de registros.
 - [ ] Traducir pattern guards a cláusulas `when (cond)` en switch expressions de C#.
 - [ ] Traducir for-comprehensions desugareadas a llamadas de funciones libres `flatMap` y `map`.
 
 #### 🧪 5. `SSharp.Spec` (Casos de Especificación)
 - [x] `048_predef_free_functions`: Validar `map`, `filter`, `length`, `foldLeft` como funciones libres.
 - [x] `049_pipe_operator`: Validar cadenas de transformación `xs |> filter(...) |> map(...)`.
-- [ ] `050_tuple_literals_and_matching`: Validar tuplas de aridad 3 y 4 con pattern matching.
+- [x] `050_tuple_literals_and_matching`: Validar tuplas de aridad 3 y 4 con pattern matching.
 - [ ] `051_pattern_guards`: Validar pattern matching con guards condicionales `if`.
 - [ ] `052_as_patterns`: Validar enlace simultáneo del todo y las partes con `@`.
 - [ ] `053_for_comprehensions`: Validar comprensiones con generadores y filtros.
