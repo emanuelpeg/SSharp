@@ -82,7 +82,12 @@ public record TupleExpr(List<Expr> Elements, int Line, int Column) : Expr;
 
 
 // Patterns and Match Cases
-public record MatchCase(Pattern Pattern, Expr Body, int Line, int Column);
+
+/// <summary>
+/// A single arm in a match expression. <c>Guard</c> is optional; when present it
+/// represents the <c>if &lt;condition&gt;</c> predicate that must hold for the arm to fire.
+/// </summary>
+public record MatchCase(Pattern Pattern, Expr? Guard, Expr Body, int Line, int Column);
 
 public abstract record Pattern : ASTNode;
 
@@ -95,3 +100,9 @@ public record IdentifierPattern(string Name, int Line, int Column) : Pattern;
 public record ConstructorPattern(string Name, List<Pattern> SubPatterns, int Line, int Column) : Pattern;
 
 public record TuplePattern(List<Pattern> Elements, int Line, int Column) : Pattern;
+
+/// <summary>
+/// As-Pattern: <c>name @ subPattern</c>.
+/// Binds the matched value to <c>Name</c> while still matching <c>SubPattern</c>.
+/// </summary>
+public record AsPattern(string Name, Pattern SubPattern, int Line, int Column) : Pattern;

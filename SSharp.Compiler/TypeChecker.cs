@@ -746,6 +746,12 @@ public class TypeChecker
 
                     BindPatternVariables(c.Pattern, matchedType);
 
+                    // Type-check the guard expression (must be Boolean)
+                    if (c.Guard != null)
+                    {
+                        CheckExpr(c.Guard);
+                    }
+
                     SSharpType caseBodyType = CheckExpr(c.Body);
 
                     _env = prevCaseEnv;
@@ -755,6 +761,7 @@ public class TypeChecker
                         : FindCommonSupertype(casesCommonType, caseBodyType);
                 }
                 return casesCommonType ?? SSharpType.Unit;
+
 
             case MemberAccessExpr memberAccess:
                 {
@@ -911,8 +918,15 @@ public class TypeChecker
                     }
                     break;
                 }
+
+            case AsPattern asPat:
+                // Bind the whole matched value to the alias name, then recurse into the sub-pattern.
+                _env.Define(asPat.Name, type);
+                BindPatternVariables(asPat.SubPattern, type);
+                break;
         }
     }
+
 
     private SSharpType ResolveType(TypeNode node)
     {

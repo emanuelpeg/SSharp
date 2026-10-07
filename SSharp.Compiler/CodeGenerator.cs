@@ -747,13 +747,22 @@ public class CodeGenerator
         sb.AppendLine($"({GenerateExpr(match.Expression)}) switch");
         sb.AppendLine("{");
         
+        // A guarded arm is never exhaustive by itself (even if the pattern is wildcard/identifier)
         bool lastIsExhaustive = match.Cases.Count > 0 &&
+            match.Cases[^1].Guard == null &&
             match.Cases[^1].Pattern is WildcardPattern or IdentifierPattern;
 
         foreach (var c in match.Cases)
         {
             string patternStr = GeneratePattern(c.Pattern, matchedType);
-            sb.AppendLine($"    {patternStr} => {GenerateExpr(c.Body)},");
+            if (c.Guard != null)
+            {
+                sb.AppendLine($"    {patternStr} when ({GenerateExpr(c.Guard)}) => {GenerateExpr(c.Body)},");
+            }
+            else
+            {
+                sb.AppendLine($"    {patternStr} => {GenerateExpr(c.Body)},");
+            }
         }
 
         if (!lastIsExhaustive)
@@ -946,10 +955,20 @@ public class CodeGenerator
                     return $"SSharp.Runtime.SSharpTuple{arity}<{string.Join(", ", typeArgs)}>({string.Join(", ", subPatternsStrs)})";
                 }
 
+            case AsPattern asPat:
+                {
+                    // C# does not have a direct @-pattern. We use the form:
+                    //   subPattern and var alias
+                    // which is valid in C# 9+ switch expressions.
+                    string subStr = GeneratePattern(asPat.SubPattern, matchedType);
+                    return $"{subStr} and var {asPat.Name}";
+                }
+
             default:
                 return "_";
         }
     }
+
 
     private SSharpType ApplyTypeMap(SSharpType type, Dictionary<string, SSharpType> typeMap)
     {
@@ -1138,7 +1157,14 @@ public class CodeGenerator
                     foreach (var c in matchExpr.Cases)
                     {
                         string patternStr = GeneratePattern(c.Pattern, matchedType);
-                        sb.AppendLine($"{spaces}    case {patternStr}:");
+                        if (c.Guard != null)
+                        {
+                            sb.AppendLine($"{spaces}    case {patternStr} when ({GenerateExpr(c.Guard)}):");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{spaces}    case {patternStr}:");
+                        }
                         sb.AppendLine($"{spaces}        {{");
                         sb.Append(GenerateTailRecBody(c.Body, funName, funParams, retType, indent + 12));
                         sb.AppendLine();
@@ -1149,6 +1175,7 @@ public class CodeGenerator
                     sb.Append($"{spaces}}}");
                     return sb.ToString();
                 }
+
 
             case CallExpr call when IsRecursiveCall(call, funName):
                 {

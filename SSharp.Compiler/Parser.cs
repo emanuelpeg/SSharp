@@ -536,10 +536,18 @@ public class Parser
     {
         Token caseToken = Consume(TokenType.Case, "Expected 'case' in pattern match.");
         Pattern pattern = ParsePattern();
+
+        // Optional guard: if <expression>
+        Expr? guard = null;
+        if (Match(TokenType.If))
+        {
+            guard = ParseExpression();
+        }
+
         Consume(TokenType.Arrow, "Expected '=>' after case pattern.");
         Expr body = ParseExpression();
         Match(TokenType.Semicolon);
-        return new MatchCase(pattern, body, caseToken.Line, caseToken.Column);
+        return new MatchCase(pattern, guard, body, caseToken.Line, caseToken.Column);
     }
 
     private Pattern ParsePrimaryPattern()
@@ -579,6 +587,12 @@ public class Parser
                     }
                     else
                     {
+                        // Could be: identifier  OR  identifier @ subPattern (as-pattern)
+                        if (Match(TokenType.At))
+                        {
+                            Pattern subPattern = ParsePrimaryPattern();
+                            return new AsPattern(token.Lexeme, subPattern, token.Line, token.Column);
+                        }
                         return new IdentifierPattern(token.Lexeme, token.Line, token.Column);
                     }
                 }
@@ -620,6 +634,7 @@ public class Parser
 
         return pattern;
     }
+
 
     private Expr ParseBlockExpr(Token braceToken)
     {
