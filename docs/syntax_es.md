@@ -275,6 +275,7 @@ def describirFigura(f: Figura): String = f match {
 4. **Patrón de Constructor**: Desestructura una `case class`.
 5. **Patrón de Tupla (`(p1, p2, ...)` )**: Desestructura los elementos posicionales de una tupla.
 6. **Patrón Infijo de Lista (`head :: tail`)**: Separa la cabeza y la cola de una lista.
+7. **Patrón de Alias / As-Pattern (`alias @ subPatrón`)**: Enlaza la estructura completa a un nombre a la vez que deconstruye sus componentes internos.
 
 ```scala
 def procesar(x: Any): String = x match {
@@ -282,6 +283,24 @@ def procesar(x: Any): String = x match {
     case "admin"    => "Es el usuario administrador"
     case n: Int     => "Es un entero: " + n
     case _          => "Valor desconocido"
+}
+```
+
+### Pattern Guards (`if`) y As-Patterns (`@`)
+
+```scala
+// Pattern Guards con 'if':
+def evaluar(n: Int): String = n match {
+    case x if x < 0      => "Negativo"
+    case 0               => "Cero"
+    case x if x % 2 == 0 => "Positivo par"
+    case _               => "Positivo impar"
+}
+
+// As-Patterns (@) para ligar el todo y sus partes:
+def duplicateHead(l: List[Int]): List[Int] = l match {
+    case Nil                 => Nil
+    case original @ (h :: _) => h :: original
 }
 ```
 
@@ -399,6 +418,39 @@ val total = List(1, 2, 3, 4, 5, 6)
     |> map((n: Int) => n * 10)
     |> sum
 // total = 120
+```
+
+### For-Comprehensions
+
+SSharp soporta for-comprehensions monádicas al estilo Scala (`for { ... } yield ...` o `for ( ... ) yield ...`) con generadores (`x <- xs`) y filtros (`if condicion`):
+
+```scala
+val pares = for {
+    x <- List(1, 2, 3)
+    y <- List(10, 20)
+    if x + y > 15
+} yield x + y
+// pares: List(21, 22, 23)
+```
+
+En concordancia con la filosofía *Pure Functions & Data First* de SSharp, las comprensiones se desugarean directamente a llamadas a las funciones libres del Prelude `flatMap`, `map` y `filter`, sin depender de métodos orientados a objetos:
+
+```csharp
+// Desugaring funcional puro generado en C#:
+flatMap((x) => map((y) => (x + y), filter((y) => ((x + y) > 15), List(10, 20))), List(1, 2, 3))
+```
+
+Las comprensiones también operan fluidamente con `Option`:
+
+```scala
+val optA: Option[Int] = Some(10)
+val optB: Option[Int] = Some(20)
+
+val sumOpt = for {
+    a <- optA
+    b <- optB
+} yield a + b
+// sumOpt: Some(30)
 ```
 
 ---

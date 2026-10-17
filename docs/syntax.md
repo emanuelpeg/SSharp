@@ -275,6 +275,7 @@ def describeShape(s: Shape): String = s match {
 4. **Constructor Pattern**: Destructures a `case class`.
 5. **Tuple Pattern (`(p1, p2, ...)` )**: Destructures n-ary tuples positional elements.
 6. **Infix List Pattern (`head :: tail`)**: Separates the head and tail of a list.
+7. **As-Pattern (`alias @ subPattern`)**: Binds the whole matched value to an alias name while matching inner sub-patterns.
 
 ```scala
 def process(x: Any): String = x match {
@@ -282,6 +283,24 @@ def process(x: Any): String = x match {
     case "admin" => "It is the admin user"
     case n       => "It is some other value: " + n
     case _       => "Unknown value"
+}
+```
+
+### Pattern Guards (`if`) and As-Patterns (`@`)
+
+```scala
+// Pattern Guards with 'if':
+def evaluar(n: Int): String = n match {
+    case x if x < 0      => "Negativo"
+    case 0               => "Cero"
+    case x if x % 2 == 0 => "Positivo par"
+    case _               => "Positivo impar"
+}
+
+// As-Patterns (@) to bind both the whole structure and its inner elements:
+def duplicateHead(l: List[Int]): List[Int] = l match {
+    case Nil                 => Nil
+    case original @ (h :: _) => h :: original
 }
 ```
 
@@ -399,6 +418,39 @@ val total = List(1, 2, 3, 4, 5, 6)
     |> map((n: Int) => n * 10)
     |> sum
 // total = 120
+```
+
+### For-Comprehensions
+
+SSharp provides Scala-style for-comprehensions (`for { ... } yield ...` or `for ( ... ) yield ...`) to chain and transform monadic data types (such as `List` and `Option`) cleanly:
+
+```scala
+val pares = for {
+    x <- List(1, 2, 3)
+    y <- List(10, 20)
+    if x + y > 15
+} yield x + y
+// pares: List(21, 22, 23)
+```
+
+In accordance with SSharp's *Pure Functions & Data First* philosophy, the compiler desugars for-comprehensions directly into calls to the pure Prelude free functions `flatMap`, `map`, and `filter`:
+
+```csharp
+// Pure functional desugaring generated in C#:
+flatMap((x) => map((y) => (x + y), filter((y) => ((x + y) > 15), List(10, 20))), List(1, 2, 3))
+```
+
+Comprehensions also support `Option`:
+
+```scala
+val optA: Option[Int] = Some(10)
+val optB: Option[Int] = Some(20)
+
+val sumOpt = for {
+    a <- optA
+    b <- optB
+} yield a + b
+// sumOpt: Some(30)
 ```
 
 ---

@@ -132,6 +132,8 @@ El runner [`SpecTests.cs`](SpecTests.cs) compila y ejecuta ambos programas en me
 | `048_predef_free_functions` | Funciones libres del Prelude para inspección, transformación y reducción de listas. | Prelude funcional puro: `length`, `filter`, `map`, `foldLeft`, `reverse`, `take`, `contains`, `isEmpty`. |
 | `049_pipe_operator` | Composición de transformaciones de izquierda a derecha con el operador pipe (`\|>`). | Sintaxis de pipeline: `xs \|> filter(p) \|> map(f) \|> sum`. |
 | `050_tuple_literals_and_matching` | Tuplas N-arias nativas con sintaxis literal y deconstrucción en pattern matching. | Tuplas `(a, b, c)`, tipos `(A, B, C)`, acceso `t._1`, `case (x, y) => ...`. |
+| `051_match_guards_and_as_patterns` | Pattern guards expresivos y enlace de alias As-pattern sin anidamiento. | Pattern guards `case x if cond => ...` y As-patterns `case alias @ (h :: t) => ...`. |
+| `052_for_comprehensions` | Comprensiones monádicas `for` con generadores y guards desugareadas a funciones libres puras. | Azúcar sintáctico: `for { x <- xs; y <- ys; if cond } yield ...` hacia `flatMap`, `map` y `filter`. |
 
 ---
 

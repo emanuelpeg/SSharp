@@ -23,6 +23,8 @@ public enum TokenType
     Import,
     True,
     False,
+    For,
+    Yield,
 
     // Operators
     Plus,       // +
@@ -39,6 +41,7 @@ public enum TokenType
     GreaterOrEqual,// >=
     Arrow,      // =>
     ArrowThin,  // ->
+    LeftArrow,  // <-
     Bang,       // !
     At,         // @
     Pipe,       // |>

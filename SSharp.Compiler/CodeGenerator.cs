@@ -549,6 +549,9 @@ public class CodeGenerator
             case IfExpr condExpr:
                 return $"({GenerateExpr(condExpr.Condition)} ? {GenerateExpr(condExpr.ThenBranch)} : {GenerateExpr(condExpr.ElseBranch)})";
 
+            case ForExpr forExpr:
+                return GenerateForExpr(forExpr);
+
             case CallExpr call:
                 {
                     string calleeStr = GenerateExpr(call.Callee);
@@ -771,6 +774,95 @@ public class CodeGenerator
         }
         sb.Append("}");
         return sb.ToString();
+    }
+
+    private string GenerateForExpr(ForExpr forExpr)
+    {
+        var stages = new List<(ForGenerator Gen, List<ForFilter> Filters)>();
+        (ForGenerator Gen, List<ForFilter> Filters)? currentStage = null;
+
+        foreach (var en in forExpr.Enumerators)
+        {
+            if (en is ForGenerator gen)
+            {
+                if (currentStage != null)
+                {
+                    stages.Add(currentStage.Value);
+                }
+                currentStage = (gen, new List<ForFilter>());
+            }
+            else if (en is ForFilter filter)
+            {
+                if (currentStage != null)
+                {
+                    currentStage.Value.Filters.Add(filter);
+                }
+            }
+        }
+
+        if (currentStage != null)
+        {
+            stages.Add(currentStage.Value);
+        }
+
+        if (stages.Count == 0)
+        {
+            return "new SSharp.Runtime.Nil<object>()";
+        }
+
+        string GetParamName(Pattern pat) => pat switch
+        {
+            IdentifierPattern id => EscapeIdentifier(id.Name),
+            _ => "_t"
+        };
+
+        string GenerateStage(int index)
+        {
+            var stage = stages[index];
+            string param = GetParamName(stage.Gen.Pattern);
+            string source = GenerateExpr(stage.Gen.Source);
+
+            foreach (var filt in stage.Filters)
+            {
+                if (stage.Gen.Pattern is IdentifierPattern)
+                {
+                    source = $"filter(({param}) => {GenerateExpr(filt.Condition)}, {source})";
+                }
+                else
+                {
+                    string patStr = GeneratePattern(stage.Gen.Pattern, SSharpType.Any);
+                    source = $"filter(({param}) => ({param}) switch {{ {patStr} => {GenerateExpr(filt.Condition)}, _ => false }}, {source})";
+                }
+            }
+
+            if (index == stages.Count - 1)
+            {
+                if (stage.Gen.Pattern is IdentifierPattern)
+                {
+                    return $"map(({param}) => {GenerateExpr(forExpr.YieldExpr)}, {source})";
+                }
+                else
+                {
+                    string patStr = GeneratePattern(stage.Gen.Pattern, SSharpType.Any);
+                    return $"map(({param}) => ({param}) switch {{ {patStr} => {GenerateExpr(forExpr.YieldExpr)}, _ => throw new System.InvalidOperationException() }}, {source})";
+                }
+            }
+            else
+            {
+                string nextBody = GenerateStage(index + 1);
+                if (stage.Gen.Pattern is IdentifierPattern)
+                {
+                    return $"flatMap(({param}) => {nextBody}, {source})";
+                }
+                else
+                {
+                    string patStr = GeneratePattern(stage.Gen.Pattern, SSharpType.Any);
+                    return $"flatMap(({param}) => ({param}) switch {{ {patStr} => {nextBody}, _ => throw new System.InvalidOperationException() }}, {source})";
+                }
+            }
+        }
+
+        return GenerateStage(0);
     }
 
     private string GeneratePattern(Pattern pattern, SSharpType matchedType)

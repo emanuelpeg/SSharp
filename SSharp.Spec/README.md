@@ -136,6 +136,8 @@ Assert.Equal(csResult.Output, ssResult.Output);
 | `048_predef_free_functions` | Standard Prelude free functions for list inspection, transformation, and reduction. | Pure functional Prelude: `length`, `filter`, `map`, `foldLeft`, `reverse`, `take`, `contains`, `isEmpty`. |
 | `049_pipe_operator` | Left-to-right functional pipeline composition with pipe operator (`\|>`). | Pipeline syntax: `xs \|> filter(p) \|> map(f) \|> sum`. |
 | `050_tuple_literals_and_matching` | Native heterogeneous N-ary tuples with literal syntax and pattern matching deconstruction. | Tuples `(a, b, c)`, types `(A, B, C)`, positional access `t._1`, `case (x, y) => ...`. |
+| `051_match_guards_and_as_patterns` | Expressive pattern guards and As-pattern alias binding without nesting. | Pattern guards `case x if cond => ...` and As-patterns `case alias @ (h :: t) => ...`. |
+| `052_for_comprehensions` | Monadic for-comprehensions with generators and guards desugared to pure free functions. | Syntactic sugar: `for { x <- xs; y <- ys; if cond } yield ...` into `flatMap`, `map`, and `filter`. |
 
 ---
 

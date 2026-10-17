@@ -80,6 +80,13 @@ public record MemberAccessExpr(Expr Receiver, string Member, List<TypeNode> Type
 
 public record TupleExpr(List<Expr> Elements, int Line, int Column) : Expr;
 
+// For-Comprehensions
+public abstract record ForEnumerator(int Line, int Column) : ASTNode;
+public record ForGenerator(Pattern Pattern, Expr Source, int Line, int Column) : ForEnumerator(Line, Column);
+public record ForFilter(Expr Condition, int Line, int Column) : ForEnumerator(Line, Column);
+
+public record ForExpr(List<ForEnumerator> Enumerators, Expr YieldExpr, int Line, int Column) : Expr;
+
 
 // Patterns and Match Cases
 

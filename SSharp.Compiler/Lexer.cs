@@ -26,7 +26,9 @@ public class Lexer
         { "extends", TokenType.Extends },
         { "import", TokenType.Import },
         { "true", TokenType.True },
-        { "false", TokenType.False }
+        { "false", TokenType.False },
+        { "for", TokenType.For },
+        { "yield", TokenType.Yield }
     };
 
     public Lexer(string source)
@@ -128,6 +130,7 @@ public class Lexer
                 return MakeToken(TokenType.Bang);
 
             case '<':
+                if (Match('-')) return MakeToken(TokenType.LeftArrow);
                 return MakeToken(Match('=') ? TokenType.LessOrEqual : TokenType.LessThan);
 
             case '>':

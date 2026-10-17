@@ -291,6 +291,7 @@ public class TypeChecker
                 if (valDecl.Type != null)
                 {
                     SSharpType expectedType = ResolveType(valDecl.Type);
+                    SpecializeNilOrNone(valDecl.Value, expectedType);
                     if (valDecl.Value is IdentifierExpr valId && (valId.Name == "Nil" || valId.Name == "None"))
                     {
                         ResolvedTypes[valDecl.Value] = expectedType;
@@ -343,6 +344,8 @@ public class TypeChecker
 
                 if (expectedRetType != null)
                 {
+                    SpecializeNilOrNone(funDecl.Body, expectedRetType);
+
                     if (!IsSubtype(bodyType, expectedRetType))
                     {
                         Error(funDecl.Line, funDecl.Column, $"Type mismatch in function '{funDecl.Name}': expected return type {expectedRetType}, but got {bodyType}.");
@@ -760,7 +763,64 @@ public class TypeChecker
                         ? caseBodyType 
                         : FindCommonSupertype(casesCommonType, caseBodyType);
                 }
+
+                if (casesCommonType is GenericType commonGt && commonGt.TypeArgs.Count > 0 && commonGt.TypeArgs[0] != SSharpType.Any)
+                {
+                    foreach (var c in match.Cases)
+                    {
+                        SpecializeNilOrNone(c.Body, commonGt);
+                    }
+                }
+
                 return casesCommonType ?? SSharpType.Unit;
+
+            case ForExpr forExpr:
+                {
+                    if (forExpr.Enumerators.Count == 0 || forExpr.Enumerators[0] is not ForGenerator)
+                    {
+                        Error(forExpr.Line, forExpr.Column, "A for-comprehension must begin with a generator.");
+                        return SSharpType.Any;
+                    }
+
+                    var forEnv = new Env(_env);
+                    var prevForEnv = _env;
+                    _env = forEnv;
+
+                    string containerName = "List";
+
+                    foreach (var enumerator in forExpr.Enumerators)
+                    {
+                        if (enumerator is ForGenerator gen)
+                        {
+                            SSharpType srcType = CheckExpr(gen.Source);
+                            SSharpType elemType = SSharpType.Any;
+                            if (srcType is GenericType gt && gt.TypeArgs.Count > 0)
+                            {
+                                containerName = gt.Name;
+                                elemType = gt.TypeArgs[0];
+                            }
+                            else if (srcType is PrimitiveType pt && pt.Name == "Nil")
+                            {
+                                containerName = "List";
+                                elemType = SSharpType.Any;
+                            }
+                            BindPatternVariables(gen.Pattern, elemType);
+                        }
+                        else if (enumerator is ForFilter filter)
+                        {
+                            SSharpType filterCondType = CheckExpr(filter.Condition);
+                            if (filterCondType != SSharpType.Boolean)
+                            {
+                                Error(filter.Line, filter.Column, $"Filter condition in for-comprehension must be Boolean, but got {filterCondType}.");
+                            }
+                        }
+                    }
+
+                    SSharpType yieldType = CheckExpr(forExpr.YieldExpr);
+                    _env = prevForEnv;
+
+                    return new GenericType(containerName, new List<SSharpType> { yieldType });
+                }
 
 
             case MemberAccessExpr memberAccess:
@@ -1126,6 +1186,33 @@ public class TypeChecker
         return SSharpType.Any;
     }
 
+    private void SpecializeNilOrNone(Expr expr, SSharpType targetType)
+    {
+        if (targetType is GenericType gt && gt.TypeArgs.Count > 0 && gt.TypeArgs[0] != SSharpType.Any)
+        {
+            if (expr is IdentifierExpr id && (id.Name == "Nil" || id.Name == "None"))
+            {
+                ResolvedTypes[id] = targetType;
+            }
+            else if (expr is BlockExpr block && block.FinalExpr != null)
+            {
+                SpecializeNilOrNone(block.FinalExpr, targetType);
+            }
+            else if (expr is MatchExpr match)
+            {
+                foreach (var c in match.Cases)
+                {
+                    SpecializeNilOrNone(c.Body, targetType);
+                }
+            }
+            else if (expr is IfExpr ifExpr)
+            {
+                SpecializeNilOrNone(ifExpr.ThenBranch, targetType);
+                SpecializeNilOrNone(ifExpr.ElseBranch, targetType);
+            }
+        }
+    }
+
     /// <summary>
     /// Unifies an expected pattern type with an actual type, populating the type substitutions map.
     /// </summary>
@@ -1371,6 +1458,15 @@ public class TypeChecker
                 {
                     ValidateTailCalls(c.Body, funName, inTailPosition, ref recursiveCallCount);
                 }
+                break;
+
+            case ForExpr forExpr:
+                foreach (var en in forExpr.Enumerators)
+                {
+                    if (en is ForGenerator gen) ValidateTailCalls(gen.Source, funName, false, ref recursiveCallCount);
+                    else if (en is ForFilter filt) ValidateTailCalls(filt.Condition, funName, false, ref recursiveCallCount);
+                }
+                ValidateTailCalls(forExpr.YieldExpr, funName, false, ref recursiveCallCount);
                 break;
 
             case CallExpr call:

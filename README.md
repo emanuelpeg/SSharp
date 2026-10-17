@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/emanuelpeg/SSharp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://dotnet.microsoft.com/download"><img src="https://img.shields.io/badge/.NET-10.0-purple.svg" alt=".NET 10.0"></a>
-  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-50%20passing-brightgreen.svg" alt="Spec Tests"></a>
+  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-52%20passing-brightgreen.svg" alt="Spec Tests"></a>
 </p>
 
 ---
@@ -29,8 +29,9 @@
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Pipe operator (`|>`)** — forward data flow and composition without nested function calls or OO method chains
 - **N-ary Tuples (`(a, b, ...)`)** — native literal syntax for heterogeneous tuples (`Tuple2` to `Tuple8`), type annotations `(T1, T2, ...)`, positional access (`t._1`, `t._2`), and pattern matching deconstruction
+- **For-Comprehensions** — syntactic sugar for monadic pipelines (`for { x <- xs; y <- ys; if cond } yield expr`), desugared directly into pure calls to Prelude free functions (`flatMap`, `map`, `filter`)
 - **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
-- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, tuple, and **infix list `head::tail` patterns**)
+- **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, tuple, infix list `head::tail` patterns, **pattern guards (`if`)**, and **as-patterns (`@`)**)
 - **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
 - **Generic functions** and data types with **covariance (`+T`) and contravariance (`-T`)** — Scala-style variance annotations
@@ -53,9 +54,9 @@ SSharp/
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-├── SSharp.Spec/         # Language specification test suite (50 verified FP cases)
+├── SSharp.Spec/         # Language specification test suite (52 verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
-├── Sample/              # Sample programs (hello.ss, pipe.ss, tuples.ss, collections.ss, etc.)
+├── Sample/              # Sample programs (hello.ss, pipe.ss, tuples.ss, guards.ss, for_comprehension.ss, collections.ss, etc.)
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
 ```
 
@@ -269,6 +270,26 @@ def area(s: Shape): Double = s match {
 }
 ```
 
+#### Pattern Guards (`if`) and As-Patterns (`@`)
+
+SSharp supports pattern guards (`if <condition>`) to refine matches without nesting conditionals in case bodies, as well as **As-Patterns** (`name @ pattern`) to simultaneously bind both the entire structure and its deconstructed parts:
+
+```scala
+// Pattern Guards with 'if':
+def evaluar(n: Int): String = n match {
+    case x if x < 0      => "Negativo"
+    case 0               => "Cero"
+    case x if x % 2 == 0 => "Positivo par"
+    case _               => "Positivo impar"
+}
+
+// As-Patterns (@) to bind both the whole structure and its inner elements:
+def duplicateHead(l: List[Int]): List[Int] = l match {
+    case Nil                 => Nil
+    case original @ (h :: _) => h :: original
+}
+```
+
 ### Recursive Functions
 
 Standard recursion is supported:
@@ -351,6 +372,41 @@ val mensaje = format(("Bob", 30)) // "Bob tiene 30 años"
 ```
 
 Tuples can also be constructed using generic factories `Tuple2(...)` through `Tuple8(...)` or types `Tuple2[A, B]` through `Tuple8[...]`. Under the hood, tuples are emitted as immutable C# records (`SSharpTuple2<...>` to `SSharpTuple8<...>`), providing automatic structural value equality, readable `ToString` formatting, and positional pattern deconstruction.
+
+---
+
+### For-Comprehensions
+
+SSharp supports monadic for-comprehensions with generators (`x <- xs`) and guards (`if condition`). In line with SSharp's *Pure Functions & Data First* philosophy, comprehensions are desugared directly into pure calls to the Prelude free functions `flatMap`, `map`, and `filter`, rather than OO methods:
+
+```scala
+val pares = for {
+    x <- List(1, 2, 3)
+    y <- List(10, 20)
+    if x + y > 15
+} yield x + y
+// pares: List(21, 22, 23)
+```
+
+The compiler transparently translates the above expression into nested free function applications:
+
+```csharp
+// Pure functional desugaring generated in C#:
+flatMap((x) => map((y) => (x + y), filter((y) => ((x + y) > 15), List(10, 20))), List(1, 2, 3))
+```
+
+For-comprehensions also work seamlessly with `Option` and other monadic data structures:
+
+```scala
+val optA: Option[Int] = Some(10)
+val optB: Option[Int] = Some(20)
+
+val sumOpt = for {
+    a <- optA
+    b <- optB
+} yield a + b
+// sumOpt: Some(30)
+```
 
 ---
 

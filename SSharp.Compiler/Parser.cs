@@ -376,6 +376,9 @@ public class Parser
             case TokenType.If:
                 return ParseIfExpr(token);
 
+            case TokenType.For:
+                return ParseForExpr(token);
+
             case TokenType.Identifier:
                 if (Peek().Type == TokenType.Arrow)
                 {
@@ -675,6 +678,58 @@ public class Parser
         Consume(TokenType.Else, "Expected 'else' after 'if' branch.");
         Expr elseBranch = ParseExpression();
         return new IfExpr(cond, thenBranch, elseBranch, ifToken.Line, ifToken.Column);
+    }
+
+    private Expr ParseForExpr(Token forToken)
+    {
+        bool isBrace = Match(TokenType.LBrace);
+        if (!isBrace)
+        {
+            Consume(TokenType.LParen, "Expected '{' or '(' after 'for'.");
+        }
+        TokenType closeToken = isBrace ? TokenType.RBrace : TokenType.RParen;
+
+        var enumerators = new List<ForEnumerator>();
+
+        while (!Check(closeToken) && !IsAtEnd())
+        {
+            if (Match(TokenType.If))
+            {
+                Token ifTok = Previous();
+                Expr cond;
+                if (Check(TokenType.LParen) && !isBrace)
+                {
+                    Consume(TokenType.LParen, "Expected '(' before if condition.");
+                    cond = ParseExpression();
+                    Consume(TokenType.RParen, "Expected ')' after if condition.");
+                }
+                else
+                {
+                    cond = ParseExpression();
+                }
+                enumerators.Add(new ForFilter(cond, ifTok.Line, ifTok.Column));
+            }
+            else
+            {
+                Pattern pattern = ParsePattern();
+                Token arrow = Consume(TokenType.LeftArrow, "Expected '<-' after pattern in for generator.");
+                Expr source = ParseExpression();
+                enumerators.Add(new ForGenerator(pattern, source, arrow.Line, arrow.Column));
+            }
+
+            Match(TokenType.Semicolon);
+        }
+
+        Consume(closeToken, $"Expected '{ (isBrace ? "}" : ")") }' after for enumerators.");
+        Consume(TokenType.Yield, "Expected 'yield' in for comprehension.");
+        Expr yieldExpr = ParseExpression();
+
+        if (enumerators.Count == 0 || enumerators[0] is not ForGenerator)
+        {
+            Error(forToken, "A for-comprehension must begin with a generator (e.g. 'x <- xs').");
+        }
+
+        return new ForExpr(enumerators, yieldExpr, forToken.Line, forToken.Column);
     }
 
     private Expr ParseLambdaExpr(Token lParen)

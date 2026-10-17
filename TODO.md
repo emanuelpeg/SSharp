@@ -30,9 +30,9 @@ A diferencia de los lenguajes híbridos orientados a objetos (como Scala o C#), 
 | **Invocación de Operaciones** | `map f xs`, `length xs` | `map(f, xs)`, `length(xs)` | `map(f, xs)`, `length(xs)` | ✅ Completado |
 | **Operador Pipe (`\|>`)** | `&` (Data.Function) | `xs \|> f \|> g` | `xs \|> f \|> g` | ✅ Completado |
 | **Tuplas de Aridad N** | `(a, b, c, ...)` | `(a, b, c, ...)` nativo | `(a, b, c, ...)` nativo | ✅ Completado |
-| **Pattern Guards & As-Patterns** | `f x \| x > 0`, `xs@(x:rest)` | ❌ No disponible | `case x if x > 0 =>`, `case xs @ (h :: t) =>` | **Prioridad 1** |
-| **List / Monad Comprehensions** | `[x*2 \| x <- xs, x > 0]` | ❌ No disponible | `[f(x) \| x <- xs, cond(x)]` | **Prioridad 2** |
-| **Do-Notation / For-Comprehensions** | `do { x <- mx; return (x+1) }` | ❌ No disponible | `for { x <- xs } yield ...` (desugared to pure `flatMap`/`map`) | **Prioridad 2** |
+| **Pattern Guards & As-Patterns** | `f x \| x > 0`, `xs@(x:rest)` | `case x if cond =>`, `case x @ pat =>` | `case x if x > 0 =>`, `case xs @ (h :: t) =>` | ✅ Completado |
+| **Do-Notation / For-Comprehensions** | `do { x <- mx; return (x+1) }` | `for { x <- xs } yield ...` | `for { x <- xs } yield ...` (desugared to pure `flatMap`/`map`/`filter`) | ✅ Completado |
+| **List / Monad Comprehensions** | `[x*2 \| x <- xs, x > 0]` | ❌ No disponible | `[f(x) \| x <- xs, cond(x)]` | **Prioridad 1** |
 | **Prelude Funcional Extendido** | `foldr`, `foldl`, `zipWith`, etc. | Métodos limitados en List/Option | Módulo `Predef` completo con funciones libres | **Prioridad 2** |
 | **Type Aliases (`type`)** | `type Point = (Int, Int)` | ❌ No disponible | `type Point = (Int, Int)` | **Prioridad 2** |
 | **Type Classes** (`Eq`, `Show`, `Functor`, `Monad`) | `class Functor f where ...` | ❌ No disponible | `trait Functor[F[_]]` + resolución de instancias | **Prioridad 3** |
@@ -193,36 +193,36 @@ gantt
 #### 🔍 2. `SSharp.Compiler` (Parser & Lexer)
 - [ ] **Lexer**:
   - [x] Agregar token `Pipe` (`|>`).
-  - [ ] Agregar token `At` (`@`).
-  - [ ] Agregar token `For` y `Yield`.
+  - [x] Agregar token `At` (`@`).
+  - [x] Agregar token `For` y `Yield`.
   - [ ] Agregar token `TypeAlias` (`type`).
 - [ ] **Parser**:
   - [x] Expresión Pipe: `lhs |> rhs` (asociativa por la izquierda).
   - [x] Tuplas literales: `(a, b, c)` en `ParsePrefix`, tipos `(A, B, C)` en `ParseType` y patrones `case (a, b) =>` en `ParsePattern`.
-  - [ ] Pattern Guards: `case pattern if cond => body` en `ParseMatchCase`.
-  - [ ] As-Patterns: `name @ pattern` en `ParsePattern`.
+  - [x] Pattern Guards: `case pattern if cond => body` en `ParseMatchCase`.
+  - [x] As-Patterns: `name @ pattern` en `ParsePattern`.
   - [ ] Type Aliases: `type Name[T] = TargetType;`.
-  - [ ] For-Comprehensions: `for { x <- xs; if cond } yield expr`.
+  - [x] For-Comprehensions: `for { x <- xs; if cond } yield expr`.
 
 #### 🧠 3. `SSharp.Compiler` (TypeChecker)
 - [x] Registrar todas las funciones libres del Prelude en el entorno inicial `_env`.
 - [x] Tipar la expresión `a |> f` como la aplicación de función `f(a)`.
 - [x] Tipar tuplas `(a, b, c)` como `GenericType("TupleN", [Ta, Tb, Tc])` y soportar pattern matching y acceso `_1`..`_8`.
-- [ ] Validar guards booleanos en pattern matching en el scope de las variables ligadas.
+- [x] Validar guards booleanos en pattern matching en el scope de las variables ligadas.
+- [x] Tipar For-Comprehensions infiriendo el contenedor monádico, tipos de elementos y variables ligadas en generadores y guards.
 - [ ] Expandir Type Aliases transparentemente durante `ResolveType`.
 
 #### ⚡ 4. `SSharp.Compiler` (CodeGenerator)
 - [x] Traducir `a |> f` a llamada directa de función `f(a)` en C#.
 - [x] Traducir tuplas literales `(a, b)` a `new SSharp.Runtime.SSharpTupleN<...>(...)` y pattern matching a deconstrucción de registros.
-- [ ] Traducir pattern guards a cláusulas `when (cond)` en switch expressions de C#.
-- [ ] Traducir for-comprehensions desugareadas a llamadas de funciones libres `flatMap` y `map`.
+- [x] Traducir pattern guards a cláusulas `when (cond)` en switch expressions de C# y As-Patterns a `subPattern and var alias`.
+- [x] Traducir for-comprehensions desugareadas a llamadas de funciones libres `flatMap`, `map` y `filter`.
 
 #### 🧪 5. `SSharp.Spec` (Casos de Especificación)
 - [x] `048_predef_free_functions`: Validar `map`, `filter`, `length`, `foldLeft` como funciones libres.
 - [x] `049_pipe_operator`: Validar cadenas de transformación `xs |> filter(...) |> map(...)`.
 - [x] `050_tuple_literals_and_matching`: Validar tuplas de aridad 3 y 4 con pattern matching.
-- [ ] `051_pattern_guards`: Validar pattern matching con guards condicionales `if`.
-- [ ] `052_as_patterns`: Validar enlace simultáneo del todo y las partes con `@`.
-- [ ] `053_for_comprehensions`: Validar comprensiones con generadores y filtros.
-- [ ] `054_type_aliases`: Validar sinónimos de tipos para funciones y tuplas.
-- [ ] `055_either_monad_free_functions`: Validar `Either` con funciones puras `mapEither`, `getOrElse`.
+- [x] `051_match_guards_and_as_patterns`: Validar pattern matching con guards condicionales `if` y as-patterns `@`.
+- [x] `052_for_comprehensions`: Validar comprensiones con generadores y filtros.
+- [ ] `053_type_aliases`: Validar sinónimos de tipos para funciones y tuplas.
+- [ ] `054_either_monad_free_functions`: Validar `Either` con funciones puras `mapEither`, `getOrElse`.

@@ -214,6 +214,17 @@ public static class Predef
     public static SSharpOption<T> Option<T>(T value) =>
         value == null ? new None<T>() : new Some<T>(value);
 
+    // -- Option free functions ------------------------------------------------
+
+    /// <summary>Applies f to the value inside opt if defined, returning a new Option.</summary>
+    public static SSharpOption<U> map<T, U>(Func<T, U> f, SSharpOption<T> opt) => opt.Map(f);
+
+    /// <summary>Returns opt if defined and predicate p holds, None otherwise.</summary>
+    public static SSharpOption<T> filter<T>(Func<T, bool> p, SSharpOption<T> opt) => opt.Filter(p);
+
+    /// <summary>Applies f returning an Option if opt is defined, None otherwise.</summary>
+    public static SSharpOption<U> flatMap<T, U>(Func<T, SSharpOption<U>> f, SSharpOption<T> opt) => opt.FlatMap(f);
+
     // -- Cons factory ---------------------------------------------------------
 
     /// <summary>Creates a Cons cell for list.</summary>
