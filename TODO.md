@@ -4,225 +4,318 @@
 
 # SSharp — Roadmap hacia un Lenguaje 100% Funcional Puro (TODO)
 
-## 🌿 Filosofía de Diseño: *Pure Functions & Data First*
+## 🌿 Filosofía de Diseño: *Pure Functions & Data First* (Referencia: Haskell)
 
-A diferencia de los lenguajes híbridos orientados a objetos (como Scala o C#), la visión de **SSharp** es ser un lenguaje **puramente funcional** (en la tradición de **Haskell, Elm, OCaml y Clojure**):
+A diferencia de los lenguajes híbridos orientados a objetos (como Scala o C#), la meta y visión fundamental de **SSharp** es ser un lenguaje **puramente funcional**, tomando a **Haskell** como lenguaje de referencia canónico:
 
-1. **Sin métodos orientados a objetos (`xs.method()`)**: No existen métodos de instancia adjuntos a objetos. Los datos son estructuras inmutables pasivas (ADTs, records, tuplas) y las operaciones son **funciones libres puras**:
-   - ❌ *No orientado a objetos*: `xs.map(f)`, `xs.filter(p)`, `xs.size`, `p.copy(x = 1)`
-   - ✅ *100% Funcional*: `map(f, xs)`, `filter(p, xs)`, `size(xs)` (o `length(xs)`), `updatePoint(p, 1, p.y)`
-2. **Composición y Flujo con Operador Pipe (`|>`)**: Para encadenar transformaciones de datos sin anidamiento excesivo ni métodos OO:
-   ```ssharp
-   val resultado = xs
-       |> filter(isEven)
-       |> map(doubleIt)
-       |> take(5)
-   ```
-3. **Transparencia Referencial**: Todas las funciones son deterministas y libres de efectos secundarios ocultos.
+1. **Sin métodos orientados a objetos (`xs.method()`)**:
+   - No existen métodos de instancia adjuntos a objetos o estructuras de datos.
+   - Los datos son estructuras inmutables pasivas (ADTs, records, tuplas) y **todas las operaciones son funciones libres puras**:
+     - ❌ *Orientado a objetos (a erradicar)*: `xs.head`, `xs.tail`, `xs.map(f)`, `xs.filter(p)`, `xs.size`, `opt.getOrElse(default)`, `s.contains(x)`, `m.get(k)`
+     - ✅ *100% Funcional Puro*: `head(xs)`, `tail(xs)`, `map(f, xs)`, `filter(p, xs)`, `length(xs)`, `getOrElse(default, opt)`, `contains(x, s)`, `get(k, m)`
+2. **`head` y `tail` como Funciones Puras**:
+   - En Haskell: `head :: [a] -> a` y `tail :: [a] -> [a]`.
+   - En SSharp debe escribirse estrictamente `head(list)` y `tail(list)`, nunca `list.head` ni `list.headValue`.
+   - Además, para evitar excepciones en listas vacías, se adoptarán las funciones puras seguras `headOption(xs): Option[T]` y `tailOption(xs): Option[List[T]]` (análogo a `listToMaybe` / `uncons` en Haskell).
+3. **Composición y Flujo con Operador Pipe (`|>`)**:
+   - Encadenamiento funcional de izquierda a derecha (análogo al operador `&` de Haskell en `Data.Function`):
+     ```ssharp
+     val resultado = xs
+         |> filter(isEven)
+         |> map(doubleIt)
+         |> take(5)
+     ```
+4. **Transparencia Referencial y Control de Efectos**:
+   - Todas las funciones son deterministas y libres de efectos secundarios ocultos.
+   - La entrada/salida y mutabilidad deben estar aisladas y gobernadas mediante tipos monádicos puros (Mónada `IO`), al igual que en Haskell.
 
 ---
 
-## 📊 Matriz Comparativa: Haskell vs. SSharp (Ruta hacia Pureza Total)
+## 🔍 Auditoría Exhaustiva: Elementos No Funcionales Detectados en el Repositorio
 
-| Característica | Haskell | SSharp Actual | Meta en SSharp Puro | Estado |
+Tras una inspección profunda de todo el código fuente, compilador, runtime, pruebas y ejemplos, se han detectado los siguientes aspectos imperativos u orientados a objetos que deben ser modificados:
+
+### 1. Ejemplos con Sintaxis No Funcional / Métodos Orientados a Objetos (`Sample/`)
+
+- **`Sample/collections.ss` [CRÍTICO - Roto]**:
+  - Utiliza profusamente la sintaxis de métodos y propiedades de objetos con punto `.`:
+    - Lista: `l.size`, `l.headValue`, `l.tailList`, `l.reverse`, `l.take(3)`, `l.drop(2)`, `l.contains(3)`, `l.forall(...)`, `l.exists(...)`, `l.map(...)`, `l.filter(...)`, `l.foldLeft(...)`, `l.appended(...)`, `l.prepended(...)`, `l.concat(...)`.
+    - Set: `s.size`, `s.contains(2)`, `s.incl(10)`, `s.excl(2)`, `s.union(sB)`, `s.intersect(sB)`, `s.diff(sB)`, `s.toList`.
+    - Map: `m.size`, `m.contains(...)`, `m.get(...)`, `m.updated(...)`, `m.removed(...)`, `m.keys`, `m.values`, `m.toList`.
+  - *Acción requerida*: Modificar completamente `Sample/collections.ss` para usar exclusivamente funciones libres del Prelude: `head(l)`, `tail(l)`, `length(l)`, `take(3, l)`, `drop(2, l)`, `contains(3, l)`, `forall(p, l)`, `exists(p, l)`, `map(f, l)`, `filter(p, l)`, `foldLeft(z, f, l)`, `append(l, 6)`, `prepend(0, l)`, `concat(l, l2)`. Y para Set/Map: `size(s)`, `contains(elem, s)`, `insert(elem, s)`, `delete(elem, s)`, `union(sA, sB)`, `get(k, m)`, `keys(m)`, `values(m)`, etc.
+
+- **`Sample/monads.ss` [CRÍTICO - Roto]**:
+  - Invoca métodos de instancia sobre `Option`, `List`, `Set` y `Map`:
+    - `opt1.isEmpty`, `opt1.isDefined`, `opt2.getOrElse(...)`, `opt1.flatMap(...)`, `nestedOpt.flatten()`.
+    - `l.flatMap(...)`, `nestedList.flatten()`.
+    - `s.flatMap(...)`, `nestedSet.flatten()`.
+    - `m.flatMap(...)`.
+  - *Acción requerida*: Reemplazar todas las invocaciones por funciones libres puras: `isEmpty(opt1)`, `isDefined(opt1)`, `getOrElse(99, opt2)`, `flatMap(f, opt1)`, `flatten(nestedOpt)`, `flatMap(f, l)`, `flatten(nestedList)`, etc.
+
+- **`Sample/variance.ss` [Conceptual - Paradigma OO]**:
+  - Demuestra varianza de subtipado de orientación a objetos (`+A` covarianza, `-A` contravarianza) y herencia con `trait Container[+A]`, `trait Printer[-A]` y clases mutables `trait MutableBox[A]`.
+  - En Haskell no existe el subtipado ($A <: B$), ni herencia ni varianza; todo el polimorfismo se modela de forma paramétrica ($f :: a \to b$) o ad-hoc mediante Type Classes (`Functor`, `Contravariant`).
+  - *Acción requerida*: Eliminar o rediseñar el ejemplo hacia polimorfismo paramétrico puro, Type Classes y tipos algebraicos.
+
+- **`Sample/hello.ss` [Efectos Secundarios Impuros]**:
+  - Contiene funciones con efectos secundarios ocultos: `def sideEffect(): Boolean = { println("Side effect executed!"); true }` evaluadas dentro de funciones booleanas puras (`and(false, sideEffect())`).
+  - En Haskell, ninguna función pura puede desencadenar efectos colaterales; las operaciones de E/S deben devolver `IO a`.
+  - *Acción requerida*: Adecuar el ejemplo al modelo de pureza referencial.
+
+- **`Sample/tuples.ss` [Acceso a Miembros con Punto]**:
+  - Accede a los elementos de tuplas con notación punto OO: `persona._1`, `persona._2`, `persona._3`.
+  - En Haskell se utiliza pattern matching directo `val (nombre, edad, activo) = persona` o funciones selectoras libres (`fst`, `snd`).
+  - *Acción requerida*: Promover pattern matching y proveer funciones selectoras puras (`fst`, `snd`) eliminando la dependencia de la notación punto.
+
+- **`SSharp.Spec/cases/025_simple_trait_and_class/input.ss` [Acceso a Campos OO]**:
+  - Accede a los campos del case class con notación punto: `s.name`, `s.age`.
+  - En Haskell, los records generan automáticamente funciones selectoras: `name s`, `age s`.
+  - *Acción requerida*: Soportar funciones selectoras generadas automáticamente `name(s)` y `age(s)` o deconstrucción por pattern matching.
+
+---
+
+### 2. Funciones de Lista (`head`, `tail`, `init`, `last`) ✅
+
+- **Estado**: **COMPLETADO**
+- **Cambios realizados**:
+  - ✅ `HeadValue` y `TailList` en `SSharp.Runtime/List.cs` cambiados de `public` a `internal`, forzando el uso de `head(xs)` y `tail(xs)` desde código SSharp.
+  - ✅ `head`, `tail`, `reduce`, `init` y `last` en `Predef.cs` reescritos con pattern matching directo sobre `Cons<T>`, sin dependencia de las propiedades internas.
+  - ✅ Funciones seguras implementadas y tipadas en `TypeChecker.cs`:
+    - `headOption[T](xs: List[T]): Option[T]` (equivalente a `listToMaybe` en Haskell).
+    - `tailOption[T](xs: List[T]): Option[List[T]]`.
+    - `uncons[T](xs: List[T]): Option[(T, List[T])]` (equivalente a `Data.List.uncons`).
+    - `init[T](xs: List[T]): List[T]` y `last[T](xs: List[T]): T`.
+  - ✅ Spec case `053_head_and_tail_pure_functions` creado y validado.
+
+---
+
+### 3. Falta de Funciones Libres para `Option`, `Set` y `Map` en el Prelude
+
+Actualmente, el `TypeChecker` rechaza llamadas a métodos en `Set` y `Map`, pero no proporciona las funciones libres equivalentes en `Predef`:
+
+- **Para `Option[T]` (referencia Haskell: `Maybe a`)**:
+  - [ ] `isSome[T](opt: Option[T]): Boolean` / `isDefined` (Haskell: `isJust`)
+  - [ ] `isNone[T](opt: Option[T]): Boolean` / `isEmpty` (Haskell: `isNothing`)
+  - [ ] `getOrElse[T](defaultVal: T, opt: Option[T]): T` (Haskell: `fromMaybe`)
+  - [ ] `option[A, B](defaultVal: B, f: A => B, opt: Option[A]): B` (Haskell: `maybe`)
+  - [ ] `flatten[T](opt: Option[Option[T]]): Option[T]` (Haskell: `join`)
+  - [ ] `toOption[T](value: T): Option[T]`
+
+- **Para `Set[T]` (referencia Haskell: `Data.Set`)**:
+  - [ ] `size[T](s: Set[T]): Int` (Haskell: `size`)
+  - [ ] `isEmpty[T](s: Set[T]): Boolean` (Haskell: `null`)
+  - [ ] `contains[T](elem: T, s: Set[T]): Boolean` (Haskell: `member`)
+  - [ ] `insert[T](elem: T, s: Set[T]): Set[T]` / `incl`
+  - [ ] `delete[T](elem: T, s: Set[T]): Set[T]` / `excl`
+  - [ ] `union[T](s1: Set[T], s2: Set[T]): Set[T]`
+  - [ ] `intersect[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `intersection`)
+  - [ ] `diff[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `difference`)
+  - [ ] `toList[T](s: Set[T]): List[T]` (Haskell: `toList`)
+  - [ ] `fromList[T](xs: List[T]): Set[T]` (Haskell: `fromList`)
+  - [ ] `map[T, U](f: T => U, s: Set[T]): Set[U]`
+  - [ ] `filter[T](p: T => Boolean, s: Set[T]): Set[T]`
+  - [ ] `foldLeft[T, U](z: U, f: (U, T) => U, s: Set[T]): U`
+
+- **Para `Map[K, V]` (referencia Haskell: `Data.Map`)**:
+  - [ ] `size[K, V](m: Map[K, V]): Int`
+  - [ ] `isEmpty[K, V](m: Map[K, V]): Boolean`
+  - [ ] `contains[K, V](k: K, m: Map[K, V]): Boolean` (Haskell: `member`)
+  - [ ] `get[K, V](k: K, m: Map[K, V]): Option[V]` (Haskell: `lookup`)
+  - [ ] `insert[K, V](k: K, v: V, m: Map[K, V]): Map[K, V]` / `update`
+  - [ ] `delete[K, V](k: K, m: Map[K, V]): Map[K, V]` / `remove`
+  - [ ] `keys[K, V](m: Map[K, V]): Set[K]` / `List[K]`
+  - [ ] `values[K, V](m: Map[K, V]): List[V]` (Haskell: `elems`)
+  - [ ] `toList[K, V](m: Map[K, V]): List[(K, V)]` (Haskell: `toList`)
+  - [ ] `fromList[K, V](entries: List[(K, V)]): Map[K, V]` (Haskell: `fromList`)
+  - [ ] `map[K, V, V2](f: V => V2, m: Map[K, V]): Map[K, V2]` (Haskell: `map`)
+  - [ ] `filter[K, V](p: ((K, V)) => Boolean, m: Map[K, V]): Map[K, V]`
+
+---
+
+### 4. Elementos Imperativos en el Runtime (`SSharp.Runtime`)
+
+- **Métodos `Foreach(Action<...>)` [Imperativo - No Funcional]**:
+  - En `List.cs`, `Set.cs` y `Map.cs` existe el método `Foreach(Action<T>)`.
+  - Este método promueve la iteración imperativa y efectos secundarios por mutación, en lugar de reducciones puras (`foldLeft`/`foldRight`), transformaciones (`map`) o recursión.
+  - *Acción requerida*: Eliminar `Foreach` del Runtime de SSharp.
+- **Métodos de Instancia Públicos**:
+  - En `SSharpList`, `SSharpOption`, `SSharpSet` y `SSharpMap` se conservan métodos de instancia públicos (`Map`, `Filter`, etc.).
+  - Deben quedar como detalles internos de implementación en C# o ser reemplazados completamente por la API estática de `Predef`.
+
+---
+
+### 5. Compilador: Notación Punto, Subtipado y ADTs (`SSharp.Compiler`)
+
+- **Operador Punto (`.`) vs. Composición Funcional**:
+  - En Haskell, el operador `.` es la composición matemática de funciones: `(f . g) x = f (g x)`.
+  - En SSharp, el parser aún tiene `MemberAccessExpr`.
+  - *Acción requerida*:
+    1. Eliminar soporte sintáctico de llamadas a métodos (`expr.method(...)`).
+    2. Redireccionar el acceso a registros `record.field` a funciones selectoras de primera clase `field(record)`.
+    3. Liberar el token `.` para que pueda ser utilizado como operador de composición de funciones o implementar `compose(f, g)`.
+- **Subtipado y Varianza (`trait`, `class`, `extends`, `+A`, `-A`)**:
+  - En SSharp, los ADTs se modelan actualmente usando el patrón orientado a objetos de Scala 2 (`sealed trait Base`, `case class Deriv(...) extends Base`).
+  - Esto introduce un sistema de subtipado complejo (`IsSubtype`, `LUB`, `Variance.Covariant`, etc.) que no pertenece a un lenguaje puramente funcional como Haskell.
+  - *Acción requerida*: Diseñar e incorporar sintaxis nativa de tipos de datos algebraicos puros (ejemplo: `data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double)` o `enum Shape`) sin herencia ni `extends`.
+
+---
+
+### 6. Transparencia Referencial y Mónada IO
+
+- **Estado actual**:
+  - `print`, `println`, `readLine` devuelven `Unit` o `String` y ejecutan operaciones de E/S directamente en cualquier punto del programa.
+  - Cualquier función puede ejecutar efectos secundarios sin estar tipada.
+- **Referencia Haskell**:
+  - En Haskell, toda operación con efectos de entrada/salida está encapsulada en el tipo monádico `IO a`. Una función con efectos es un valor de tipo `IO[Unit]`, preservando la transparencia referencial en el resto del lenguaje.
+- **Acción requerida**:
+  - Diseñar el tipo monádico `IO[A]` para encapsular operaciones de entrada/salida.
+  - El punto de entrada `main` debe retornar `IO[Unit]` (o desugarear secuenciación monádica en `main`).
+
+---
+
+## 📊 Matriz Comparativa: Haskell vs. SSharp
+
+| Dimensión / Característica | Haskell (Referencia Pura) | SSharp Actual | Meta en SSharp Funcional Puro | Estado |
 | :--- | :---: | :---: | :---: | :---: |
-| **Paradigma** | 100% Funcional | Híbrido (funciones + métodos en runtime) | **100% Funciones Libres** | 🔄 En migración |
-| **Invocación de Operaciones** | `map f xs`, `length xs` | `map(f, xs)`, `length(xs)` | `map(f, xs)`, `length(xs)` | ✅ Completado |
-| **Operador Pipe (`\|>`)** | `&` (Data.Function) | `xs \|> f \|> g` | `xs \|> f \|> g` | ✅ Completado |
-| **Tuplas de Aridad N** | `(a, b, c, ...)` | `(a, b, c, ...)` nativo | `(a, b, c, ...)` nativo | ✅ Completado |
-| **Pattern Guards & As-Patterns** | `f x \| x > 0`, `xs@(x:rest)` | `case x if cond =>`, `case x @ pat =>` | `case x if x > 0 =>`, `case xs @ (h :: t) =>` | ✅ Completado |
-| **Do-Notation / For-Comprehensions** | `do { x <- mx; return (x+1) }` | `for { x <- xs } yield ...` | `for { x <- xs } yield ...` (desugared to pure `flatMap`/`map`/`filter`) | ✅ Completado |
-| **List / Monad Comprehensions** | `[x*2 \| x <- xs, x > 0]` | ❌ No disponible | `[f(x) \| x <- xs, cond(x)]` | **Prioridad 1** |
-| **Prelude Funcional Extendido** | `foldr`, `foldl`, `zipWith`, etc. | Métodos limitados en List/Option | Módulo `Predef` completo con funciones libres | **Prioridad 2** |
-| **Type Aliases (`type`)** | `type Point = (Int, Int)` | ❌ No disponible | `type Point = (Int, Int)` | **Prioridad 2** |
-| **Type Classes** (`Eq`, `Show`, `Functor`, `Monad`) | `class Functor f where ...` | ❌ No disponible | `trait Functor[F[_]]` + resolución de instancias | **Prioridad 3** |
-| **Higher-Kinded Types (HKTs)** | `f a` donde `f :: * -> *` | ❌ Solo tipos de orden 1 | Constructores de tipo `F[A]` de orden superior | **Prioridad 3** |
-| **Streams / LazyList Infinitos** | `[1..]`, `take 5 (repeat 1)` | ❌ Listas finitas | `Stream.from(1)`, `take(5, stream)` | **Prioridad 3** |
+| **Paradigma** | 100% Funcional Puro | Híbrido funcional con vestigios OO | **100% Funciones Libres & Datos Puros** | 🔄 En migración |
+| **`head` y `tail`** | `head xs`, `tail xs` | `head(xs)`, `tail(xs)` / `l.headValue` en ejemplos | **`head(xs)`, `tail(xs)` obligatorios** | ⚠️ Ejemplos por corregir |
+| **`headOption` / `uncons`** | `listToMaybe xs`, `uncons xs` | ❌ Lanza excepción en `Nil` | `headOption(xs)`, `tailOption(xs)` | **Prioridad 1** |
+| **Invocación de Colecciones** | `map f xs`, `length xs` | `map(f, xs)` en listas, pero OO en `Sample` | `map(f, xs)`, `filter(p, xs)` en todas | ⚠️ Samples por corregir |
+| **Prelude Set & Map** | `Data.Set`, `Data.Map` libres | ❌ Sin funciones libres en `Predef` | Funciones libres completas (`lookup`, `insert`, etc.) | **Prioridad 1** |
+| **Operador Pipe / Composición** | `&` (`Data.Function`) / `.` | `\|>` nativo / ❌ Sin operador `.` de composición | `\|>` + composición pura de funciones | ✅ `\|>` / **Prioridad 2** comp. |
+| **Notación Punto (`.`)** | Composición de funciones `(f . g)` | Acceso a miembros/métodos OO | Remoción de métodos OO; selectoras como funciones | **Prioridad 1** |
+| **Tuplas de Aridad N** | `(a, b, c)` + `fst`, `snd` | `(a, b, c)` + `_1`, `_2` OO | `(a, b, c)` + pattern matching + `fst`/`snd` | 🔄 Tuplas listas, faltan `fst`/`snd` |
+| **Pattern Matching & Guards** | `case x of ... \| cond ->` | `case x if cond =>`, `case x @ pat =>` | Guards y As-patterns funcionales | ✅ Completado |
+| **Comprensiones Monádicas** | `do` notation / list comp `[x \| ...]` | `for { x <- xs } yield ...` (desugared) | Desugared a `flatMap`/`map`/`filter` | ✅ Completado |
+| **Definición de ADTs** | `data Shape = Circle Float \| ...` | `sealed trait` + `case class extends` | ADT sintaxis pura sin herencia OO (`data`) | **Prioridad 2** |
+| **Subtipado y Varianza** | ❌ No hay subtipado ni `+T`/`-T` | `+A`, `-A`, jerarquía de subtipos | Paramétrico puro + Type Classes (`Functor`, etc.) | **Prioridad 3** |
+| **Type Classes** | `class Functor f where ...` | ❌ No disponible | `trait Functor[F[_]]` + resolución de instancias | **Prioridad 3** |
+| **Transparencia Referencial (IO)** | Mónada `IO a` | Efectos impuros en funciones con `Unit` | Mónada `IO[A]` para acotar efectos secundarios | **Prioridad 3** |
+| **Combinadores Funcionales** | `id`, `const`, `flip`, `curry` | ❌ No en Prelude | Combinadores estándar en `Predef` | **Prioridad 2** |
 
 ---
 
-## 🎯 Especificación de Características y Transformaciones
+## 🎯 Plan de Acción y Tareas Detalladas
 
-### 1. Migración a Funciones Libres en el Prelude (`Predef`)
-Eliminar la dependencia de invocar métodos OO (`.map`, `.filter`, `.size`, `.contains`) y sustituirlos por funciones libres de orden superior en el Prelude:
+### Fase 1: Corrección Inmediata de Ejemplos y Funciones de Prelude (Prioridad 1)
 
-```ssharp
-// En lugar de: nums.filter(isEven).map(double)
-// Forma funcional pura:
-val evens = filter(isEven, nums)
-val doubled = map((x: Int) => x * 2, evens)
-val len = length(nums)
-val hasTen = contains(10, nums)
-```
+#### 🧪 1.1. Modificación de Ejemplos en `Sample/`
+- [x] **`Sample/collections.ss`**:
+  - Reemplazado `l.headValue` por `head(l)`.
+  - Reemplazado `l.tailList` por `tail(l)`.
+  - Reemplazado `l.size` por `length(l)` o `size(l)`.
+  - Reemplazadas todas las llamadas de métodos `.take(3)`, `.drop(2)`, `.contains(3)`, `.map(...)`, `.filter(...)`, `.foldLeft(...)`, `.concat(...)` por llamadas a funciones libres.
+  - Reemplazadas llamadas en `Set`: `size(s)`, `contains(..., s)`, `insert(..., s)`, `delete(..., s)`, `union(sA, sB)`, `toList(s)`.
+  - Reemplazadas llamadas en `Map`: `size(m)`, `contains(k, m)`, `get(..., m)`, `insert(..., m)`, `delete(..., m)`, `keys(m)`, `values(m)`, `toList(m)`.
+- [x] **`Sample/monads.ss`**:
+  - Reemplazado `isEmpty(opt1)`, `isDefined(opt1)`.
+  - Reemplazado `getOrElse(99, opt2)`.
+  - Reemplazado `flatMap(f, opt1)`, `flatten(nestedOpt)`, `flatMap(f, l)`, `flatten(nestedList)`, `flatMap(f, s)`, `flatten(nestedSet)`, `flatMap(f, m)`.
+  - Empleo de funciones libres `fst(t)` y `snd(t)` en tuplas.
+- [x] **`Sample/tuples.ss`**:
+  - Sustituidos `persona._1`, `persona._2`, `persona._3` por deconstrucción funcional pura con pattern matching y funciones libres selectoras `fst(par)`, `snd(par)`.
+- [x] **`Sample/variance.ss`**:
+  - Rediseñado hacia polimorfismo paramétrico puro y ADTs (Sum & Product Types), eliminando mutabilidad (`MutableBox`) y conceptos de herencia OO.
+- [x] **`Sample/hello.ss`**:
+  - Adecuado para demostrar evaluación perezosa pura por nombre (`call-by-name`) sin efectos secundarios ocultos, y funciones libres `head(l)` y `tail(l)`.
 
-**Funciones a estandarizar en el Prelude**:
-- **Inspección**: `length(xs)`, `isEmpty(xs)`, `head(xs)`, `tail(xs)`, `contains(x, xs)`
-- **Transformación**: `map(f, xs)`, `filter(p, xs)`, `flatMap(f, xs)`, `reverse(xs)`, `concat(xs, ys)`
-- **Reducción**: `foldl(z, f, xs)`, `foldr(z, f, xs)`, `sum(xs)`, `product(xs)`, `reduce(f, xs)`
-- **Subconjuntos**: `take(n, xs)`, `drop(n, xs)`, `takeWhile(p, xs)`, `dropWhile(p, xs)`
-- **Combinación**: `zip(xs, ys)`, `zipWith(f, xs, ys)`
+#### 📦 1.2. `SSharp.Runtime` (Funciones Libres del Prelude)
+- [x] **Funciones de Lista Seguras**:
+  - [x] Implementado `headOption<T>(SSharpList<T> xs): SSharpOption<T>` en `Predef.cs`.
+  - [x] Implementado `tailOption<T>(SSharpList<T> xs): SSharpOption<SSharpList<T>>` en `Predef.cs`.
+  - [x] Implementado `uncons<T>(SSharpList<T> xs): SSharpOption<SSharpTuple2<T, SSharpList<T>>>` en `Predef.cs`.
+  - [x] Implementado `init<T>(SSharpList<T> xs): SSharpList<T>` y `last<T>(SSharpList<T> xs): T`.
+  - [x] Implementado `forall`, `exists`, `append`, `prepend`, `flatten`.
+- [x] **Funciones Libres para `Option`**:
+  - [x] `isSome<T>(SSharpOption<T> opt): bool`
+  - [x] `isNone<T>(SSharpOption<T> opt): bool`
+  - [x] `getOrElse<T>(T defaultVal, SSharpOption<T> opt): T`
+  - [x] `flatten<T>(SSharpOption<SSharpOption<T>> opt): SSharpOption<T>`
+- [x] **Funciones Libres para `Set`**:
+  - [x] `size<T>(SSharpSet<T> s): int`, `isEmpty<T>(SSharpSet<T> s): bool`
+  - [x] `contains<T>(T elem, SSharpSet<T> s): bool`
+  - [x] `insert<T>(T elem, SSharpSet<T> s): SSharpSet<T>`, `incl`
+  - [x] `delete<T>(T elem, SSharpSet<T> s): SSharpSet<T>`, `excl`
+  - [x] `union<T>(SSharpSet<T> a, SSharpSet<T> b): SSharpSet<T>`
+  - [x] `intersect<T>(SSharpSet<T> a, SSharpSet<T> b): SSharpSet<T>`
+  - [x] `diff<T>(SSharpSet<T> a, SSharpSet<T> b): SSharpSet<T>`
+  - [x] `toList<T>(SSharpSet<T> s): SSharpList<T>`
+  - [x] `map`, `filter`, `flatMap`, `flatten`
+- [x] **Funciones Libres para `Map`**:
+  - [x] `size<K, V>(SSharpMap<K, V> m): int`, `isEmpty<K, V>(SSharpMap<K, V> m): bool`
+  - [x] `contains<K, V>(K k, SSharpMap<K, V> m): bool`
+  - [x] `get<K, V>(K k, SSharpMap<K, V> m): SSharpOption<V>`
+  - [x] `insert<K, V>(K k, V v, SSharpMap<K, V> m): SSharpMap<K, V>`, `updated`
+  - [x] `delete<K, V>(K k, SSharpMap<K, V> m): SSharpMap<K, V>`, `removed`
+  - [x] `keys<K, V>(SSharpMap<K, V> m): SSharpSet<K>`
+  - [x] `values<K, V>(SSharpMap<K, V> m): SSharpList<V>`
+  - [x] `toList<K, V>(SSharpMap<K, V> m): SSharpList<SSharpTuple2<K, V>>`
+  - [x] `flatMap`
+- [x] **Funciones para Tuplas y Combinadores**:
+  - [x] `fst<A, B>(SSharpTuple2<A, B> t): A` y `snd<A, B>(SSharpTuple2<A, B> t): B`
+  - [x] `id<T>(T x): T`
+  - [x] `constVal<A, B>(A a, B b): A`
+- [ ] **Limpieza de Métodos Imperativos**:
+  - [ ] Eliminar `Foreach` en `List.cs`, `Set.cs` y `Map.cs`.
 
----
-
-### 2. Operador Pipe (`|>`)
-Permite leer el flujo de transformación de izquierda a derecha (hacia adelante), fundamental en lenguajes puramente funcionales:
-
-```ssharp
-// x |> f  equivale a  f(x)
-val resultado = List(1, 2, 3, 4, 5, 6)
-    |> filter(isEven)
-    |> map((x: Int) => x * 10)
-    |> sum
-```
-
----
-
-### 3. Tuplas Literales N-arias (`Tuple2` - `Tuple8`)
-Sintaxis literal para empaquetar datos heterogéneos sin crear clases nominales:
-
-```ssharp
-val persona: (String, Int, Boolean) = ("Alice", 25, true)
-
-// Deconstrucción en funciones / pattern matching:
-def format(t: (String, Int)): String = t match {
-    case (nombre, edad) => nombre + " tiene " + edad + " años"
-}
-```
-
----
-
-### 4. Pattern Matching con Guards y As-Patterns
-Control de patrones más expresivo sin anidar condicionales en el cuerpo:
-
-```ssharp
-def evaluar(n: Int): String = n match {
-    case x if x < 0 => "Negativo"
-    case 0 => "Cero"
-    case x if x % 2 == 0 => "Positivo par"
-    case _ => "Positivo impar"
-}
-
-// As-Patterns (@) para ligar el todo y sus partes:
-def duplicateHead(l: List[Int]): List[Int] = l match {
-    case Nil => Nil
-    case original @ (h :: _) => h :: original
-}
-```
-
----
-
-### 5. For-Comprehensions Desugareadas a Funciones Libres
-Las comprensiones monádicas se desugarean directamente a llamadas a las funciones libres `flatMap`, `map` y `filter`:
-
-```ssharp
-val pares = for {
-    x <- List(1, 2, 3)
-    y <- List(10, 20)
-    if x + y > 15
-} yield x + y
-
-// Desugaring puro:
-// flatMap((x: Int) => 
-//     flatMap((y: Int) => 
-//         map((_: Unit) => x + y, filter((_: Unit) => x + y > 15, List(Unit)))
-//     , List(10, 20))
-// , List(1, 2, 3))
-```
+#### 🧠 1.3. `SSharp.Compiler` (TypeChecker & CodeGenerator)
+- [x] Registrar en el entorno inicial `_env` de `TypeChecker.cs` todas las funciones libres nuevas de `Option`, `Set`, `Map`, `Tuple` y seguras de lista (`headOption`, `tailOption`, `uncons`).
+- [x] Soporte de inferencia de tipos para llamadas a `get`, `insert`, `delete`, `keys`, `values`, `toList`, `flatten`, `fst`, `snd`, `getOrElse`.
 
 ---
 
-### 6. Type Aliases (`type`)
-Definir sinónimos de tipos para simplificar código funcional de orden superior:
+### Fase 2: Pureza de Datos y Tipos Algebraicos (Prioridad 2)
 
-```ssharp
-type Predicate[A] = A => Boolean
-type Transform[A, B] = A => B
-type Point = (Double, Double)
-```
-
----
-
-### 7. Tipos Mónada Puros en Runtime (`Either`, `Option`, `State`)
-- `Option[A]`: `Some(v)` y `None` con funciones libres `isSome(opt)`, `getOrElse(default, opt)`, `mapOption(f, opt)`.
-- `Either[L, R]`: `Left(err)` y `Right(val)` para manejo puro de errores sin excepciones.
-
----
-
-## 🗺️ Plan de Implementación (Roadmap)
-
-```mermaid
-gantt
-    title Plan de Evolución hacia SSharp 100% Funcional
-    dateFormat  YYYY-MM-DD
-    section 1. Pure Function Prelude
-    Estandarizar funciones libres en Predef (map, filter, fold, etc.) :active, p1_1, 2026-08-20, 3d
-    Operador Pipe (|>)                                              :p1_2, after p1_1, 2d
-    section 2. Tuplas y Pattern Matching
-    Tuplas Literales N-arias (a, b, c)                             :p2_1, after p1_2, 3d
-    Pattern Guards (case ... if) & As-Patterns (alias @ pat)       :p2_2, after p2_1, 3d
-    section 3. Flujo Monádico y Tipos
-    For-Comprehensions a Funciones Libres                          :p3_1, after p2_2, 4d
-    Type Aliases (type X = Y)                                      :p3_2, after p3_1, 2d
-    Mónada Either[L, R] & Funciones Libres                         :p3_3, after p3_2, 3d
-    section 4. Type Classes y HKTs
-    Sistema de Type Classes (Eq, Show, Functor)                    :p4_1, after p3_3, 7d
-    Higher-Kinded Types (F[A])                                     :p4_2, after p4_1, 6d
-```
+- [ ] **Sintaxis Nativa de ADTs (`data` / Sum Types)**:
+  - Diseñar e incorporar sintaxis funcional pura para tipos de datos algebraicos:
+    ```ssharp
+    data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double)
+    data List[A] = Nil | Cons(head: A, tail: List[A])
+    ```
+  - Evitar el uso obligatorio de `sealed trait` y `extends` de la tradición de objetos.
+- [ ] **Funciones Selectoras de Campos**:
+  - Cada constructor con campos nombrados debe generar automáticamente funciones selectoras puras: `radius(shape)`, `width(shape)`.
+- ✅ **Type Aliases (`type`)** — COMPLETADO:
+  - Palabra clave `type` añadida al Lexer y Parser.
+  - Nodo AST `TypeAliasDecl` con soporte de type params (`type Predicate[A] = A => Boolean`).
+  - `TypeChecker.ResolveType` expande aliases de forma transparente con sustitución de variables.
+  - `CodeGenerator.MapTypeNode` expande aliases antes de emitir C# (type erasure — no genera código).
+  - Spec case `056_type_aliases` validado:
+    ```ssharp
+    type Predicate[A] = A => Boolean
+    type Transform[A, B] = A => B
+    type Point = (Double, Double)
+    type Name = String
+    ```
 
 ---
 
-### Tareas Detalladas por Componente
+### Fase 3: Transparencia Referencial, Mónada IO y Type Classes (Prioridad 3)
 
-#### 📦 1. `SSharp.Runtime` (Prelude Funcional)
-- [x] Implementar en `Predef.cs` las funciones libres de orden superior:
-  - `map<T, U>(Func<T, U> f, SSharpList<T> xs)`
-  - `filter<T>(Func<T, bool> p, SSharpList<T> xs)`
-  - `flatMap<T, U>(Func<T, SSharpList<U>> f, SSharpList<T> xs)`
-  - `foldLeft<T, U>(U z, Func<U, T, U> f, SSharpList<T> xs)`
-  - `foldRight<T, U>(U z, Func<T, U, U> f, SSharpList<T> xs)`
-  - `length<T>(SSharpList<T> xs)`, `size<T>(SSharpList<T> xs)`
-  - `isEmpty<T>(SSharpList<T> xs)`
-  - `take<T>(int n, SSharpList<T> xs)`, `drop<T>(int n, SSharpList<T> xs)`
-  - `zip<A, B>(SSharpList<A> xs, SSharpList<B> ys)`
-  - `zipWith<A, B, C>(Func<A, B, C> f, SSharpList<A> xs, SSharpList<B> ys)`
-  - `contains<T>(T elem, SSharpList<T> xs)`
-  - `reverse<T>(SSharpList<T> xs)`
-- [x] Implementar `Tuple3.cs` hasta `Tuple8.cs` y sus funciones constructoras `Tuple3(a, b, c)`.
-- [ ] Implementar `Either.cs` (`Left<L, R>`, `Right<L, R>`) con funciones libres `isLeft`, `isRight`, `mapEither`.
+- [ ] **Mónada `IO`**:
+  - Diseñar el tipo `IO[A]` para aislar efectos colaterales de consola y E/S.
+  - Convertir `println` y `readLine` en acciones puras: `println(msg): IO[Unit]`, `readLine(): IO[String]`.
+  - Integrar `IO` en for-comprehensions (`for { line <- readLine(); _ <- println("Hola " + line) } yield ()`).
+- [ ] **Sistema de Type Classes**:
+  - Modelar polimorfismo ad-hoc sin herencia:
+    - `Eq[A]`: comparación de igualdad pura.
+    - `Show[A]`: representación textual.
+    - `Functor[F[_]]`: mapeo generalizado `fmap`.
+    - `Applicative[F[_]]` y `Monad[F[_]]`.
+- [ ] **Streams / LazyList Infinitos**:
+  - Soporte de estructuras de datos perezosas infinitas al estilo Haskell (`[1..]`, `repeat`, `cycle`).
 
-#### 🔍 2. `SSharp.Compiler` (Parser & Lexer)
-- [ ] **Lexer**:
-  - [x] Agregar token `Pipe` (`|>`).
-  - [x] Agregar token `At` (`@`).
-  - [x] Agregar token `For` y `Yield`.
-  - [ ] Agregar token `TypeAlias` (`type`).
-- [ ] **Parser**:
-  - [x] Expresión Pipe: `lhs |> rhs` (asociativa por la izquierda).
-  - [x] Tuplas literales: `(a, b, c)` en `ParsePrefix`, tipos `(A, B, C)` en `ParseType` y patrones `case (a, b) =>` en `ParsePattern`.
-  - [x] Pattern Guards: `case pattern if cond => body` en `ParseMatchCase`.
-  - [x] As-Patterns: `name @ pattern` en `ParsePattern`.
-  - [ ] Type Aliases: `type Name[T] = TargetType;`.
-  - [x] For-Comprehensions: `for { x <- xs; if cond } yield expr`.
+---
 
-#### 🧠 3. `SSharp.Compiler` (TypeChecker)
-- [x] Registrar todas las funciones libres del Prelude en el entorno inicial `_env`.
-- [x] Tipar la expresión `a |> f` como la aplicación de función `f(a)`.
-- [x] Tipar tuplas `(a, b, c)` como `GenericType("TupleN", [Ta, Tb, Tc])` y soportar pattern matching y acceso `_1`..`_8`.
-- [x] Validar guards booleanos en pattern matching en el scope de las variables ligadas.
-- [x] Tipar For-Comprehensions infiriendo el contenedor monádico, tipos de elementos y variables ligadas en generadores y guards.
-- [ ] Expandir Type Aliases transparentemente durante `ResolveType`.
+## 🧪 Pruebas de Especificación Asociadas (`SSharp.Spec`)
 
-#### ⚡ 4. `SSharp.Compiler` (CodeGenerator)
-- [x] Traducir `a |> f` a llamada directa de función `f(a)` en C#.
-- [x] Traducir tuplas literales `(a, b)` a `new SSharp.Runtime.SSharpTupleN<...>(...)` y pattern matching a deconstrucción de registros.
-- [x] Traducir pattern guards a cláusulas `when (cond)` en switch expressions de C# y As-Patterns a `subPattern and var alias`.
-- [x] Traducir for-comprehensions desugareadas a llamadas de funciones libres `flatMap`, `map` y `filter`.
-
-#### 🧪 5. `SSharp.Spec` (Casos de Especificación)
-- [x] `048_predef_free_functions`: Validar `map`, `filter`, `length`, `foldLeft` como funciones libres.
-- [x] `049_pipe_operator`: Validar cadenas de transformación `xs |> filter(...) |> map(...)`.
-- [x] `050_tuple_literals_and_matching`: Validar tuplas de aridad 3 y 4 con pattern matching.
-- [x] `051_match_guards_and_as_patterns`: Validar pattern matching con guards condicionales `if` y as-patterns `@`.
-- [x] `052_for_comprehensions`: Validar comprensiones con generadores y filtros.
-- [ ] `053_type_aliases`: Validar sinónimos de tipos para funciones y tuplas.
-- [ ] `054_either_monad_free_functions`: Validar `Either` con funciones puras `mapEither`, `getOrElse`.
+- [x] `048_predef_free_functions`: `map`, `filter`, `length`, `foldLeft` como funciones libres.
+- [x] `049_pipe_operator`: Cadenas de transformación funcional con `|>`.
+- [x] `050_tuple_literals_and_matching`: Tuplas de aridad 2 a 8 con pattern matching.
+- [x] `051_match_guards_and_as_patterns`: Pattern guards condicionales y as-patterns.
+- [x] `052_for_comprehensions`: Comprensiones monádicas desugareadas a funciones libres.
+- [x] `053_head_and_tail_pure_functions`: Validación de `head`, `tail`, `last`, `init`, `headOption`, `tailOption`, `uncons` como funciones libres puras. `HeadValue`/`TailList` son `internal`.
+- [ ] `054_set_and_map_free_functions`: Validación de operaciones libres sobre `Set` y `Map`.
+- [ ] [055_option_free_functions](file:///home/emanuel/Projects/ssharp/SSharp/TODO.md#L305): Validación de `isSome`, `isNone`, `getOrElse`, `flatten` como funciones libres.
+- [x] `056_type_aliases`: Aliases simples (`type Name = String`), paramétricos (`type Predicate[A] = A => Boolean`, `type Transform[A, B] = A => B`) y de tupla (`type Point = (Double, Double)`). Expansión transparente en TypeChecker y CodeGenerator.
+- [ ] [057_either_monad_free_functions](file:///home/emanuel/Projects/ssharp/SSharp/TODO.md#L307): Validación de `Either` con funciones puras `mapEither`, `getOrElse`.

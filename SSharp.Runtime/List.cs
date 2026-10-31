@@ -75,12 +75,14 @@ public abstract record SSharpList<T>
         }
     }
 
-    // ── Element access ────────────────────────────────────────────────────────
+    // ── Element access (internal — use head(xs) / tail(xs) from Prelude) ─────
 
-    public T HeadValue =>
+    /// <summary>Internal: use free function head(xs) in SSharp code.</summary>
+    internal T HeadValue =>
         this is Cons<T> c ? c.Head : throw new InvalidOperationException("head of empty list");
 
-    public SSharpList<T> TailList =>
+    /// <summary>Internal: use free function tail(xs) in SSharp code.</summary>
+    internal SSharpList<T> TailList =>
         this is Cons<T> c ? c.Tail : throw new InvalidOperationException("tail of empty list");
 
     public bool Contains(T elem)

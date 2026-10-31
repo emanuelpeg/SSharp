@@ -53,9 +53,44 @@ public class CodeGenerator
         _resolvedTypes = resolvedTypes;
     }
 
+    /// <summary>
+    /// Type alias map populated during the first pass of Generate().
+    /// Used by MapTypeNode to expand aliases transparently (type erasure).
+    /// </summary>
+    private readonly Dictionary<string, TypeAliasDecl> _typeAliases = new();
+
+    /// <summary>
+    /// Expands a TypeNode through any registered type aliases, returning the canonical TypeNode.
+    /// </summary>
+    private TypeNode ExpandAlias(TypeNode node)
+    {
+        if (!_typeAliases.TryGetValue(node.Name, out var alias))
+            return node;
+
+        TypeNode target = alias.Target;
+        if (alias.TypeParams.Count > 0 && node.TypeArgs.Count == alias.TypeParams.Count)
+        {
+            var subst = new Dictionary<string, TypeNode>();
+            for (int i = 0; i < alias.TypeParams.Count; i++)
+                subst[alias.TypeParams[i].Name] = node.TypeArgs[i];
+            target = SubstituteTypeNode(target, subst);
+        }
+        // Recursively expand in case the target itself is an alias
+        return ExpandAlias(target);
+    }
+
+    private static TypeNode SubstituteTypeNode(TypeNode node, Dictionary<string, TypeNode> subst)
+    {
+        if (node.TypeArgs.Count == 0 && subst.TryGetValue(node.Name, out var replacement))
+            return node.IsLazy ? replacement with { IsLazy = true } : replacement;
+        var newArgs = node.TypeArgs.ConvertAll(arg => SubstituteTypeNode(arg, subst));
+        return node with { TypeArgs = newArgs };
+    }
+
+
     public string Generate(Program program)
     {
-        // First pass: identify case objects and record all class declarations
+        // First pass: identify case objects, record class declarations, and register type aliases
         foreach (var decl in program.Decls)
         {
             if (decl is ClassDecl cls)
@@ -65,6 +100,10 @@ public class CodeGenerator
                 {
                     _caseObjects.Add(cls.Name);
                 }
+            }
+            else if (decl is TypeAliasDecl alias)
+            {
+                _typeAliases[alias.Name] = alias;
             }
         }
 
@@ -151,6 +190,10 @@ public class CodeGenerator
         {
             case ImportDecl imp:
                 return $"{spaces}using {imp.Path.Trim('\"')};";
+
+            case TypeAliasDecl:
+                // Type aliases are transparent — no C# code is emitted (type erasure).
+                return string.Empty;
 
             case TraitDecl trait:
                 {
@@ -1138,6 +1181,8 @@ public class CodeGenerator
             var nonLazy = node with { IsLazy = false };
             return $"System.Func<{MapTypeNode(nonLazy)}>";
         }
+        // Transparently expand type aliases before mapping to C#
+        node = ExpandAlias(node);
         return node.Name switch
         {
             "Int" => "int",
@@ -1160,11 +1205,12 @@ public class CodeGenerator
                 0 => "System.Action",
                 _ => $"System.Func<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
             },
-            _ => node.TypeArgs.Count > 0 
+            _ => node.TypeArgs.Count > 0
                 ? $"{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>"
                 : node.Name
         };
     }
+
 
     // Helper to escape C# reserved keywords in generated identifiers
     private static readonly HashSet<string> CSharpKeywords = new HashSet<string>

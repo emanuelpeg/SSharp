@@ -5,7 +5,7 @@ using static SSharp.Runtime.Predef;
 
 namespace SSharp.Generated;
 
-public abstract record Shape;
+public interface Shape {}
 
 public record Circle(double radius) : Shape;
 
@@ -48,12 +48,7 @@ public static class Program
     }
     public static int lenDef<T>(SSharp.Runtime.SSharpList<T> l) => len(l, 0);
     public static int sum(int x, int y) => (x + y);
-    public static bool and(bool a, System.Func<bool> b) => (a ? b() : false);
-    public static bool sideEffect()
-    {
-        println("Side effect executed!");
-        return true;
-    }
+    public static int evaluateIf(bool condition, System.Func<int> expression) => (condition ? expression() : 0);
     public static SSharp.Runtime.Unit main()
     {
         var c = Circle(5d);
@@ -65,14 +60,17 @@ public static class Program
         println(("5! = " + factorial(5)));
         println(("length of list [1, 2, 3] = " + len(l, 0)));
         println(("length of list [1, 2, 3] = " + lenDef(l)));
-        println(("add 2 to 3= " + add2(3)));
+        println(("head(l) = " + head(l)));
+        println(("tail(l) = " + tail(l)));
+        println(("add 2 to 3 = " + add2(3)));
         var resultAdd2 = ((add2(10) == 12) ? "Yes" : "No");
-        println(("add 2 to 10= " + resultAdd2));
-        println("Testing lazy params:");
-        var lazyRes1 = and(false, new System.Func<bool>(() => sideEffect()));
-        println(("lazyRes1 (should not execute side effect): " + lazyRes1));
-        var lazyRes2 = and(true, new System.Func<bool>(() => sideEffect()));
-        return println(("lazyRes2 (should execute side effect): " + lazyRes2));
+        println(("add 2 to 10 = " + resultAdd2));
+        println("Testing pure lazy parameters (call-by-name):");
+        var zero = 0;
+        var lazyZero = evaluateIf(false, new System.Func<int>(() => (100 / zero)));
+        println(("lazyZero (safe without evaluating): " + lazyZero));
+        var lazyVal = evaluateIf(true, new System.Func<int>(() => (10 * 5)));
+        return println(("lazyVal (evaluated when true): " + lazyVal));
     }
     public static void Main(string[] args)
     {

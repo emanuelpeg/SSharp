@@ -1,37 +1,50 @@
-// Demostración de covarianza (+T) y contravarianza (-T) en SSharp
-// Sintaxis idéntica a Scala
+// Polimorfismo Funcional Puro y Tipos de Datos Algebraicos (ADTs)
+// Referencia canónica: Haskell (data Shape = Circle Float | Rectangle Float Float)
+// En Haskell no hay subtipado (A <: B) ni varianza OO (+A/-A); el polimorfismo es paramétrico puro.
 
-// --- Covarianza (+T) ---
-// Una lista covariant: si Cat <: Animal, entonces List[Cat] <: List[Animal]
+// --- Jerarquía de Datos Algebraicos (ADTs: Sum Types) ---
 sealed trait Animal
 case class Cat(name: String) extends Animal
 case class Dog(name: String) extends Animal
 
-// Trait covariante: si B <: A, entonces Container[B] <: Container[A]
-trait Container[+A]
-case class Box(value: String) extends Container[String]
+// Función pura de procesamiento de datos por Pattern Matching
+def animalSound(a: Animal): String = a match {
+    case Cat(n) => n + " dice: Miau"
+    case Dog(n) => n + " dice: Guau"
+}
 
-// --- Contravarianza (-T) ---
-// Un "consumer" contravariante: si Animal <: Cat, entonces Consumer[Cat] <: Consumer[Animal]
-// (un consumidor más general puede ser usado donde se espera uno más específico)
-trait Printer[-A]
+// --- Contenedor Paramétrico Puro (Polimorfismo Paramétrico) ---
+// En programación funcional pura, los contenedores son inmutables y genéricos:
+sealed trait Container[A]
+case class Box[A](value: A) extends Container[A]
 
-// --- Invarianza (T) ---
-// Mutable por naturaleza: si A != B, entonces MutableBox[A] no es subtipo de MutableBox[B]
-trait MutableBox[A]
+def unbox[A](b: Container[A]): A = b match {
+    case Box(v) => v
+}
 
-// --- Demostración de pattern matching con traits como interfaces ---
+// --- Tipo de Datos Algebraico para Formas Geométricas ---
 sealed trait Shape
 case class Circle(radius: Double) extends Shape
 case class Rectangle(width: Double, height: Double) extends Shape
 
 def area(s: Shape): Double = s match {
-    case Circle(r) => 3.14 * r * r
+    case Circle(r)       => 3.14159265 * r * r
     case Rectangle(w, h) => w * h
 }
 
-val c = Circle(5.0)
-val r = Rectangle(4.0, 6.0)
+def main(): Unit = {
+    val michi: Animal = Cat("Michi")
+    val firulais: Animal = Dog("Firulais")
+    println(animalSound(michi))
+    println(animalSound(firulais))
 
-println(area(c))
-println(area(r))
+    val intBox: Container[Int] = Box(42)
+    val strBox: Container[String] = Box("SSharp Funcional")
+    println("Box int: " + unbox(intBox))
+    println("Box str: " + unbox(strBox))
+
+    val c: Shape = Circle(5.0)
+    val r: Shape = Rectangle(4.0, 6.0)
+    println("Área círculo: " + area(c))
+    println("Área rectángulo: " + area(r))
+}

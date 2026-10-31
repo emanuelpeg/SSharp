@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/emanuelpeg/SSharp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://dotnet.microsoft.com/download"><img src="https://img.shields.io/badge/.NET-10.0-purple.svg" alt=".NET 10.0"></a>
-  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-52%20passing-brightgreen.svg" alt="Spec Tests"></a>
+  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-54%20passing-brightgreen.svg" alt="Spec Tests"></a>
 </p>
 
 ---
@@ -26,6 +26,7 @@
 ## Features
 
 - **Immutable bindings** with `val`
+- **Type Aliases (`type`)** — transparent type synonyms for higher-order functions, tuples, and types with parameterization (`type Predicate[A] = A => Boolean`, `type Point = (Double, Double)`)
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Pipe operator (`|>`)** — forward data flow and composition without nested function calls or OO method chains
 - **N-ary Tuples (`(a, b, ...)`)** — native literal syntax for heterogeneous tuples (`Tuple2` to `Tuple8`), type annotations `(T1, T2, ...)`, positional access (`t._1`, `t._2`), and pattern matching deconstruction
@@ -54,7 +55,7 @@ SSharp/
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-├── SSharp.Spec/         # Language specification test suite (52 verified FP cases)
+├── SSharp.Spec/         # Language specification test suite (54 verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
 ├── Sample/              # Sample programs (hello.ss, pipe.ss, tuples.ss, guards.ss, for_comprehension.ss, collections.ss, etc.)
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
@@ -407,6 +408,33 @@ val sumOpt = for {
 } yield a + b
 // sumOpt: Some(30)
 ```
+
+---
+
+### Type Aliases (`type`)
+
+SSharp allows defining transparent type synonyms using the `type` keyword. Type aliases simplify complex higher-order function signatures, tuple shapes, and domain concepts. They support generic type parameterization and undergo complete type erasure during C# code generation:
+
+```scala
+// Parameterized function type aliases:
+type Predicate[A] = A => Boolean
+type Transform[A, B] = A => B
+
+// Tuple and primitive aliases:
+type Point = (Double, Double)
+type Name = String
+
+// Usage in functions and values:
+def isEven: Predicate[Int] = (x: Int) => x % 2 == 0
+def double: Transform[Int, Int] = (x: Int) => x * 2
+
+def applyFilter[T](p: Predicate[T], xs: List[T]): List[T] = filter(p, xs)
+
+val origin: Point = (0.0, 0.0)
+val user: Name = "Alice"
+```
+
+Type aliases are resolved and expanded transparently by the `TypeChecker` and `CodeGenerator`, mapping directly to the underlying CLR functional types (`Func<...>`, tuples, primitives) without runtime overhead.
 
 ---
 

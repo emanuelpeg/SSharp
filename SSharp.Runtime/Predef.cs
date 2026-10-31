@@ -44,11 +44,13 @@ public static class Predef
     /// <summary>Returns true if the list has no elements.</summary>
     public static bool isEmpty<T>(SSharpList<T> xs) => xs.IsEmpty;
 
-    /// <summary>Returns the first element of the list.</summary>
-    public static T head<T>(SSharpList<T> xs) => xs.HeadValue;
+    /// <summary>Returns the first element of the list. Throws on empty list. Prefer headOption(xs).</summary>
+    public static T head<T>(SSharpList<T> xs) =>
+        xs is Cons<T> c ? c.Head : throw new InvalidOperationException("head of empty list");
 
-    /// <summary>Returns the rest of the list after the head.</summary>
-    public static SSharpList<T> tail<T>(SSharpList<T> xs) => xs.TailList;
+    /// <summary>Returns the rest of the list after the head. Throws on empty list. Prefer tailOption(xs).</summary>
+    public static SSharpList<T> tail<T>(SSharpList<T> xs) =>
+        xs is Cons<T> c ? c.Tail : throw new InvalidOperationException("tail of empty list");
 
     /// <summary>Returns true if elem is in the list.</summary>
     public static bool contains<T>(T elem, SSharpList<T> xs) => xs.Contains(elem);
@@ -96,8 +98,8 @@ public static class Predef
     /// <summary>Reduces a non-empty list using a binary operator (left-associative).</summary>
     public static T reduce<T>(Func<T, T, T> f, SSharpList<T> xs)
     {
-        if (xs.IsEmpty) throw new InvalidOperationException("reduce of empty list");
-        return xs.TailList.FoldLeft(xs.HeadValue, f);
+        if (xs is not Cons<T> first) throw new InvalidOperationException("reduce of empty list");
+        return first.Tail.FoldLeft(first.Head, f);
     }
 
     // -- List free functions -- Subsets ----------------------------------------
@@ -216,6 +218,24 @@ public static class Predef
 
     // -- Option free functions ------------------------------------------------
 
+    /// <summary>Returns true if the option has no value.</summary>
+    public static bool isEmpty<T>(SSharpOption<T> opt) => !opt.IsDefined;
+
+    /// <summary>Returns true if the option has a value.</summary>
+    public static bool isDefined<T>(SSharpOption<T> opt) => opt.IsDefined;
+
+    /// <summary>Alias for isDefined.</summary>
+    public static bool isSome<T>(SSharpOption<T> opt) => opt.IsDefined;
+
+    /// <summary>Alias for isEmpty.</summary>
+    public static bool isNone<T>(SSharpOption<T> opt) => !opt.IsDefined;
+
+    /// <summary>Returns the value inside opt if defined, or defaultVal otherwise.</summary>
+    public static T getOrElse<T>(T defaultVal, SSharpOption<T> opt) => opt.GetOrElse(() => defaultVal);
+
+    /// <summary>Returns the value inside opt if defined, or invokes defaultSupplier.</summary>
+    public static T getOrElse<T>(Func<T> defaultSupplier, SSharpOption<T> opt) => opt.GetOrElse(defaultSupplier);
+
     /// <summary>Applies f to the value inside opt if defined, returning a new Option.</summary>
     public static SSharpOption<U> map<T, U>(Func<T, U> f, SSharpOption<T> opt) => opt.Map(f);
 
@@ -224,6 +244,155 @@ public static class Predef
 
     /// <summary>Applies f returning an Option if opt is defined, None otherwise.</summary>
     public static SSharpOption<U> flatMap<T, U>(Func<T, SSharpOption<U>> f, SSharpOption<T> opt) => opt.FlatMap(f);
+
+    /// <summary>Flattens a nested Option (Option[Option[T]] -> Option[T]).</summary>
+    public static SSharpOption<T> flatten<T>(SSharpOption<SSharpOption<T>> opt) => opt.Flatten<T>();
+
+    // -- List extended free functions -----------------------------------------
+
+    /// <summary>Returns Some(head) if non-empty, None otherwise (Haskell: listToMaybe).</summary>
+    public static SSharpOption<T> headOption<T>(SSharpList<T> xs) =>
+        xs is Cons<T> c ? new Some<T>(c.Head) : new None<T>();
+
+    /// <summary>Returns Some(tail) if non-empty, None otherwise.</summary>
+    public static SSharpOption<SSharpList<T>> tailOption<T>(SSharpList<T> xs) =>
+        xs is Cons<T> c ? new Some<SSharpList<T>>(c.Tail) : new None<SSharpList<T>>();
+
+    /// <summary>Deconstructs a list into head and tail safely (Haskell: uncons).</summary>
+    public static SSharpOption<SSharpTuple2<T, SSharpList<T>>> uncons<T>(SSharpList<T> xs) =>
+        xs is Cons<T> c ? new Some<SSharpTuple2<T, SSharpList<T>>>(new SSharpTuple2<T, SSharpList<T>>(c.Head, c.Tail)) : new None<SSharpTuple2<T, SSharpList<T>>>();
+
+    /// <summary>Returns all elements except the last one (Haskell: init). Throws on empty list.</summary>
+    public static SSharpList<T> init<T>(SSharpList<T> xs)
+    {
+        if (xs is not Cons<T> c) throw new InvalidOperationException("init of empty list");
+        if (c.Tail.IsEmpty) return new Nil<T>();
+        return new Cons<T>(c.Head, init(c.Tail));
+    }
+
+    /// <summary>Returns the last element of the list (Haskell: last). Throws on empty list.</summary>
+    public static T last<T>(SSharpList<T> xs)
+    {
+        if (xs is not Cons<T> first) throw new InvalidOperationException("last of empty list");
+        var curr = first;
+        while (curr.Tail is Cons<T> next)
+        {
+            curr = next;
+        }
+        return curr.Head;
+    }
+
+    /// <summary>Returns true if all elements satisfy predicate p (Haskell: all).</summary>
+    public static bool forall<T>(Func<T, bool> p, SSharpList<T> xs) => xs.Forall(p);
+
+    /// <summary>Returns true if any element satisfies predicate p (Haskell: any).</summary>
+    public static bool exists<T>(Func<T, bool> p, SSharpList<T> xs) => xs.Exists(p);
+
+    /// <summary>Appends an element to the end of the list.</summary>
+    public static SSharpList<T> append<T>(T elem, SSharpList<T> xs) => xs.Appended(elem);
+    public static SSharpList<T> append<T>(SSharpList<T> xs, T elem) => xs.Appended(elem);
+    public static SSharpList<T> appended<T>(T elem, SSharpList<T> xs) => xs.Appended(elem);
+    public static SSharpList<T> appended<T>(SSharpList<T> xs, T elem) => xs.Appended(elem);
+
+    /// <summary>Prepends an element to the front of the list.</summary>
+    public static SSharpList<T> prepend<T>(T elem, SSharpList<T> xs) => xs.Prepended(elem);
+    public static SSharpList<T> prepended<T>(T elem, SSharpList<T> xs) => xs.Prepended(elem);
+
+    /// <summary>Flattens a list of lists into a single list (Haskell: concat).</summary>
+    public static SSharpList<T> flatten<T>(SSharpList<SSharpList<T>> xss) => xss.Flatten<T>();
+
+    // -- Set free functions ---------------------------------------------------
+
+    /// <summary>Returns the number of elements in the set.</summary>
+    public static int size<T>(SSharpSet<T> s) => s.Size;
+
+    /// <summary>Returns true if the set is empty.</summary>
+    public static bool isEmpty<T>(SSharpSet<T> s) => s.IsEmpty;
+
+    /// <summary>Returns true if elem is in the set (Haskell: member).</summary>
+    public static bool contains<T>(T elem, SSharpSet<T> s) => s.Contains(elem);
+
+    /// <summary>Returns a new set with elem added (Haskell: insert).</summary>
+    public static SSharpSet<T> insert<T>(T elem, SSharpSet<T> s) => s.Incl(elem);
+    public static SSharpSet<T> incl<T>(T elem, SSharpSet<T> s) => s.Incl(elem);
+
+    /// <summary>Returns a new set with elem removed (Haskell: delete).</summary>
+    public static SSharpSet<T> delete<T>(T elem, SSharpSet<T> s) => s.Excl(elem);
+    public static SSharpSet<T> excl<T>(T elem, SSharpSet<T> s) => s.Excl(elem);
+
+    /// <summary>Returns the union of two sets.</summary>
+    public static SSharpSet<T> union<T>(SSharpSet<T> a, SSharpSet<T> b) => a.Union(b);
+
+    /// <summary>Returns the intersection of two sets.</summary>
+    public static SSharpSet<T> intersect<T>(SSharpSet<T> a, SSharpSet<T> b) => a.Intersect(b);
+
+    /// <summary>Returns the difference of set a minus set b.</summary>
+    public static SSharpSet<T> diff<T>(SSharpSet<T> a, SSharpSet<T> b) => a.Diff(b);
+
+    /// <summary>Converts the set to an immutable list.</summary>
+    public static SSharpList<T> toList<T>(SSharpSet<T> s) => s.ToList();
+
+    /// <summary>Applies f to each element in the set.</summary>
+    public static SSharpSet<U> map<T, U>(Func<T, U> f, SSharpSet<T> s) => s.Map(f);
+
+    /// <summary>Filters the set by predicate p.</summary>
+    public static SSharpSet<T> filter<T>(Func<T, bool> p, SSharpSet<T> s) => s.Filter(p);
+
+    /// <summary>Flattens a nested set of sets.</summary>
+    public static SSharpSet<T> flatten<T>(SSharpSet<SSharpSet<T>> s) => s.Flatten<T>();
+
+    /// <summary>Applies f returning sets and flattens the result.</summary>
+    public static SSharpSet<U> flatMap<T, U>(Func<T, SSharpSet<U>> f, SSharpSet<T> s) => s.FlatMap(f);
+
+    // -- Map free functions ---------------------------------------------------
+
+    /// <summary>Returns the number of entries in the map.</summary>
+    public static int size<K, V>(SSharpMap<K, V> m) => m.Size;
+
+    /// <summary>Returns true if the map is empty.</summary>
+    public static bool isEmpty<K, V>(SSharpMap<K, V> m) => m.IsEmpty;
+
+    /// <summary>Returns true if the key exists in the map (Haskell: member).</summary>
+    public static bool contains<K, V>(K k, SSharpMap<K, V> m) => m.Contains(k);
+
+    /// <summary>Returns Some(value) if key exists in the map, None otherwise (Haskell: lookup).</summary>
+    public static SSharpOption<V> get<K, V>(K k, SSharpMap<K, V> m) => m.Get(k);
+
+    /// <summary>Returns a new map with the key-value pair updated or inserted.</summary>
+    public static SSharpMap<K, V> insert<K, V>(K k, V v, SSharpMap<K, V> m) => m.Updated(k, v);
+    public static SSharpMap<K, V> updated<K, V>(K k, V v, SSharpMap<K, V> m) => m.Updated(k, v);
+
+    /// <summary>Returns a new map with the key removed.</summary>
+    public static SSharpMap<K, V> delete<K, V>(K k, SSharpMap<K, V> m) => m.Removed(k);
+    public static SSharpMap<K, V> removed<K, V>(K k, SSharpMap<K, V> m) => m.Removed(k);
+
+    /// <summary>Returns a set containing all keys of the map.</summary>
+    public static SSharpSet<K> keys<K, V>(SSharpMap<K, V> m) => m.Keys();
+
+    /// <summary>Returns a list containing all values of the map.</summary>
+    public static SSharpList<V> values<K, V>(SSharpMap<K, V> m) => m.Values();
+
+    /// <summary>Converts the map to a list of key-value pairs (Haskell: toList).</summary>
+    public static SSharpList<SSharpTuple2<K, V>> toList<K, V>(SSharpMap<K, V> m) => m.ToList();
+
+    /// <summary>Applies f returning maps and flattens the result.</summary>
+    public static SSharpMap<K2, V2> flatMap<K, V, K2, V2>(Func<SSharpTuple2<K, V>, SSharpMap<K2, V2>> f, SSharpMap<K, V> m) => m.FlatMap(f);
+
+    // -- Tuple free functions -------------------------------------------------
+
+    /// <summary>Returns the first element of a pair (Haskell: fst).</summary>
+    public static A fst<A, B>(SSharpTuple2<A, B> t) => t._1;
+
+    /// <summary>Returns the second element of a pair (Haskell: snd).</summary>
+    public static B snd<A, B>(SSharpTuple2<A, B> t) => t._2;
+
+    // -- Pure functional combinators ------------------------------------------
+
+    /// <summary>Identity function (Haskell: id).</summary>
+    public static T id<T>(T x) => x;
+
+    /// <summary>Constant function (Haskell: const).</summary>
+    public static A constVal<A, B>(A a, B b) => a;
 
     // -- Cons factory ---------------------------------------------------------
 

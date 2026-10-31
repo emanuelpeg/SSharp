@@ -28,7 +28,8 @@ public class Lexer
         { "true", TokenType.True },
         { "false", TokenType.False },
         { "for", TokenType.For },
-        { "yield", TokenType.Yield }
+        { "yield", TokenType.Yield },
+        { "type", TokenType.TypeAlias }
     };
 
     public Lexer(string source)

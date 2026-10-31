@@ -1,9 +1,13 @@
 // 3. Tuplas Literales N-arias (Tuple2 - Tuple8)
-// Sintaxis literal para empaquetar datos heterogéneos sin crear clases nominales
+// Sintaxis funcional para empaquetar datos heterogéneos sin clases nominales
 
 val persona: (String, Int, Boolean) = ("Alice", 25, true)
 
-// Deconstrucción en funciones / pattern matching:
+// Deconstrucción funcional pura mediante Pattern Matching:
+def describePersona(p: (String, Int, Boolean)): String = p match {
+    case (nombre, edad, activo) => nombre + " (edad: " + edad + ", activo: " + activo + ")"
+}
+
 def format(t: (String, Int)): String = t match {
     case (nombre, edad) => nombre + " tiene " + edad + " años"
 }
@@ -16,14 +20,16 @@ def main(): Unit = {
     // Imprimir tupla completa
     println("persona: " + persona)
 
-    // Acceso a campos posicionales (_1, _2, _3)
-    println("Nombre: " + persona._1)
-    println("Edad: " + persona._2)
-    println("Activo: " + persona._3)
+    // Deconstrucción funcional completa con pattern matching
+    println(describePersona(persona))
+
+    // Funciones selectoras puras para pares (Haskell: fst, snd)
+    val par = ("Bob", 30)
+    println("fst(par): " + fst(par))
+    println("snd(par): " + snd(par))
 
     // Pattern matching con tuplas
-    val info = ("Bob", 30)
-    println(format(info))
+    println(format(par))
     println(format(("Charlie", 40)))
 
     // Tupla de aridad 4

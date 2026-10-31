@@ -25,6 +25,7 @@ public enum TokenType
     False,
     For,
     Yield,
+    TypeAlias,  // type
 
     // Operators
     Plus,       // +

@@ -70,6 +70,12 @@ public class TypeChecker
     private readonly Dictionary<string, ClassDecl> _classes = new();
     private readonly Dictionary<string, TraitDecl> _traits = new();
 
+    /// <summary>
+    /// Stores type alias declarations registered by the first pass of Check().
+    /// Key: alias name. Value: the TypeAliasDecl (with TypeParams and Target).
+    /// </summary>
+    private readonly Dictionary<string, TypeAliasDecl> _typeAliases = new();
+
     public TypeChecker()
     {
         // Add predefined functions from Runtime Predef
@@ -203,6 +209,49 @@ public class TypeChecker
 
         var zipWithFuncType = new FunctionType(new List<SSharpType> { typeA, typeB }, listC);
         _env.Define("zipWith", new FunctionType(new List<SSharpType> { zipWithFuncType, listA, listB }, listC));
+
+        // Extended Prelude Functions for List, Option, Set, Map, Tuple & Combinators
+        var optA = new GenericType("Option", new List<SSharpType> { typeA });
+        var setA = new GenericType("Set", new List<SSharpType> { typeA });
+        var mapAB = new GenericType("Map", new List<SSharpType> { typeA, typeB });
+
+        _env.Define("headOption", new FunctionType(new List<SSharpType> { listA }, optA));
+        _env.Define("tailOption", new FunctionType(new List<SSharpType> { listA }, new GenericType("Option", new List<SSharpType> { listA })));
+        _env.Define("uncons", new FunctionType(new List<SSharpType> { listA }, new GenericType("Option", new List<SSharpType> { tuple2AB })));
+        _env.Define("init", new FunctionType(new List<SSharpType> { listA }, listA));
+        _env.Define("last", new FunctionType(new List<SSharpType> { listA }, typeA));
+        _env.Define("forall", new FunctionType(new List<SSharpType> { predicateType, listA }, SSharpType.Boolean));
+        _env.Define("exists", new FunctionType(new List<SSharpType> { predicateType, listA }, SSharpType.Boolean));
+        _env.Define("append", new FunctionType(new List<SSharpType> { typeA, listA }, listA));
+        _env.Define("appended", new FunctionType(new List<SSharpType> { typeA, listA }, listA));
+        _env.Define("prepend", new FunctionType(new List<SSharpType> { typeA, listA }, listA));
+        _env.Define("prepended", new FunctionType(new List<SSharpType> { typeA, listA }, listA));
+        _env.Define("flatten", new FunctionType(new List<SSharpType> { SSharpType.Any }, SSharpType.Any));
+
+        _env.Define("isDefined", new FunctionType(new List<SSharpType> { optA }, SSharpType.Boolean));
+        _env.Define("isSome", new FunctionType(new List<SSharpType> { optA }, SSharpType.Boolean));
+        _env.Define("isNone", new FunctionType(new List<SSharpType> { optA }, SSharpType.Boolean));
+        _env.Define("getOrElse", new FunctionType(new List<SSharpType> { typeA, optA }, typeA));
+
+        _env.Define("insert", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
+        _env.Define("incl", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
+        _env.Define("delete", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
+        _env.Define("excl", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
+        _env.Define("union", new FunctionType(new List<SSharpType> { setA, setA }, setA));
+        _env.Define("intersect", new FunctionType(new List<SSharpType> { setA, setA }, setA));
+        _env.Define("diff", new FunctionType(new List<SSharpType> { setA, setA }, setA));
+        _env.Define("toList", new FunctionType(new List<SSharpType> { SSharpType.Any }, listA));
+
+        _env.Define("get", new FunctionType(new List<SSharpType> { typeA, mapAB }, optA));
+        _env.Define("updated", new FunctionType(new List<SSharpType> { typeA, typeB, mapAB }, mapAB));
+        _env.Define("removed", new FunctionType(new List<SSharpType> { typeA, mapAB }, mapAB));
+        _env.Define("keys", new FunctionType(new List<SSharpType> { mapAB }, setA));
+        _env.Define("values", new FunctionType(new List<SSharpType> { mapAB }, listB));
+
+        _env.Define("fst", new FunctionType(new List<SSharpType> { tuple2AB }, typeA));
+        _env.Define("snd", new FunctionType(new List<SSharpType> { tuple2AB }, typeB));
+        _env.Define("id", new FunctionType(new List<SSharpType> { typeA }, typeA));
+        _env.Define("constVal", new FunctionType(new List<SSharpType> { typeA, typeB }, typeA));
     }
 
     private void Error(int line, int col, string message)
@@ -222,7 +271,7 @@ public class TypeChecker
             else if (decl is ClassDecl cls)
             {
                 _classes[cls.Name] = cls;
-                
+
                 // If it is a case class, register constructor function/method in env
                 // e.g. Cons(head: T, tail: List[T]) has constructor function
                 if (cls.IsCase && cls.ConstructorParams.Count > 0)
@@ -241,7 +290,7 @@ public class TypeChecker
                     var retType = cls.TypeParams.Count > 0
                         ? new GenericType(cls.Name, cls.TypeParams.ConvertAll(tp => (SSharpType)new PrimitiveType(tp.Name)))
                         : (SSharpType)new PrimitiveType(cls.Name);
-                    
+
                     _env.Define(cls.Name, new FunctionType(paramTypes, retType));
                 }
                 else if (cls.IsCase && cls.ConstructorParams.Count == 0)
@@ -251,7 +300,13 @@ public class TypeChecker
                     _env.Define(cls.Name, retType);
                 }
             }
+            else if (decl is TypeAliasDecl alias)
+            {
+                // Register type alias for transparent expansion in ResolveType
+                _typeAliases[alias.Name] = alias;
+            }
         }
+
 
         // Validate variance positions for all traits and classes
         foreach (var decl in program.Decls)
@@ -376,6 +431,9 @@ public class TypeChecker
             case ExprDecl exprDecl:
                 CheckExpr(exprDecl.Expression);
                 break;
+
+            case TypeAliasDecl:
+                break; // Registered in first pass; transparent — no code emitted
 
             default:
                 throw new Exception($"Unknown declaration type: {decl.GetType().Name}");
@@ -648,29 +706,349 @@ public class TypeChecker
                     }
                     return new GenericType("Option", new List<SSharpType> { valType });
                 }
-                if (call.Callee is IdentifierExpr headId && headId.Name == "head")
+                if (call.Callee is IdentifierExpr calleeIdent)
                 {
-                    if (call.Arguments.Count > 0)
+                    string fnName = calleeIdent.Name;
+                    if (fnName == "head")
                     {
-                        SSharpType argType = CheckExpr(call.Arguments[0]);
-                        if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                        if (call.Arguments.Count > 0)
                         {
-                            return gt.TypeArgs[0];
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                            {
+                                return gt.TypeArgs[0];
+                            }
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName == "tail")
+                    {
+                        if (call.Arguments.Count > 0)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List")
+                            {
+                                return argType;
+                            }
+                        }
+                        return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "headOption")
+                    {
+                        if (call.Arguments.Count > 0)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                            {
+                                return new GenericType("Option", new List<SSharpType> { gt.TypeArgs[0] });
+                            }
+                        }
+                        return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "tailOption")
+                    {
+                        if (call.Arguments.Count > 0)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List")
+                            {
+                                return new GenericType("Option", new List<SSharpType> { argType });
+                            }
+                        }
+                        return new GenericType("Option", new List<SSharpType> { new GenericType("List", new List<SSharpType> { SSharpType.Any }) });
+                    }
+                    if (fnName == "uncons")
+                    {
+                        if (call.Arguments.Count > 0)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                            {
+                                var tupleType = new GenericType("Tuple2", new List<SSharpType> { gt.TypeArgs[0], gt });
+                                return new GenericType("Option", new List<SSharpType> { tupleType });
+                            }
+                        }
+                        return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "init")
+                    {
+                        if (call.Arguments.Count > 0) return CheckExpr(call.Arguments[0]);
+                        return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "last")
+                    {
+                        if (call.Arguments.Count > 0)
+                        {
+                            SSharpType argType = CheckExpr(call.Arguments[0]);
+                            if (argType is GenericType gt && gt.Name == "List" && gt.TypeArgs.Count > 0)
+                            {
+                                return gt.TypeArgs[0];
+                            }
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName is "size" or "length")
+                    {
+                        if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
+                        return SSharpType.Int;
+                    }
+                    if (fnName is "isEmpty")
+                    {
+                        if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
+                        return SSharpType.Boolean;
+                    }
+                    if (fnName is "isDefined" or "isSome" or "isNone")
+                    {
+                        if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
+                        return SSharpType.Boolean;
+                    }
+                    if (fnName is "forall" or "exists")
+                    {
+                        if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
+                        if (call.Arguments.Count > 1) CheckExpr(call.Arguments[1]);
+                        return SSharpType.Boolean;
+                    }
+                    if (fnName == "contains")
+                    {
+                        if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
+                        if (call.Arguments.Count > 1) CheckExpr(call.Arguments[1]);
+                        return SSharpType.Boolean;
+                    }
+                    if (fnName == "getOrElse")
+                    {
+                        if (call.Arguments.Count > 1)
+                        {
+                            SSharpType defType = CheckExpr(call.Arguments[0]);
+                            SSharpType optType = CheckExpr(call.Arguments[1]);
+                            if (optType is GenericType gt && gt.Name == "Option" && gt.TypeArgs.Count > 0)
+                            {
+                                return gt.TypeArgs[0];
+                            }
+                            return defType;
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName is "append" or "appended")
+                    {
+                        if (call.Arguments.Count == 2)
+                        {
+                            SSharpType t1 = CheckExpr(call.Arguments[0]);
+                            SSharpType t2 = CheckExpr(call.Arguments[1]);
+                            if (t1 is GenericType gt1 && gt1.Name == "List") return t1;
+                            if (t2 is GenericType gt2 && gt2.Name == "List") return t2;
+                            return new GenericType("List", new List<SSharpType> { t1 });
                         }
                     }
-                    return SSharpType.Any;
-                }
-                if (call.Callee is IdentifierExpr tailId && tailId.Name == "tail")
-                {
-                    if (call.Arguments.Count > 0)
+                    if (fnName is "prepend" or "prepended")
                     {
-                        SSharpType argType = CheckExpr(call.Arguments[0]);
-                        if (argType is GenericType gt && gt.Name == "List")
+                        if (call.Arguments.Count == 2)
                         {
-                            return argType;
+                            SSharpType elemType = CheckExpr(call.Arguments[0]);
+                            SSharpType listType = CheckExpr(call.Arguments[1]);
+                            if (listType is GenericType gt && gt.Name == "List") return listType;
+                            return new GenericType("List", new List<SSharpType> { elemType });
                         }
                     }
-                    return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    if (fnName is "insert" or "incl")
+                    {
+                        if (call.Arguments.Count == 2)
+                        {
+                            CheckExpr(call.Arguments[0]);
+                            SSharpType setType = CheckExpr(call.Arguments[1]);
+                            if (setType is GenericType gt && gt.Name == "Set") return setType;
+                            return new GenericType("Set", new List<SSharpType> { SSharpType.Any });
+                        }
+                        if (call.Arguments.Count == 3)
+                        {
+                            CheckExpr(call.Arguments[0]);
+                            CheckExpr(call.Arguments[1]);
+                            SSharpType mapType = CheckExpr(call.Arguments[2]);
+                            if (mapType is GenericType gt && gt.Name == "Map") return mapType;
+                            return new GenericType("Map", new List<SSharpType> { SSharpType.Any, SSharpType.Any });
+                        }
+                    }
+                    if (fnName == "updated")
+                    {
+                        if (call.Arguments.Count == 3)
+                        {
+                            CheckExpr(call.Arguments[0]);
+                            CheckExpr(call.Arguments[1]);
+                            SSharpType mapType = CheckExpr(call.Arguments[2]);
+                            if (mapType is GenericType gt && gt.Name == "Map") return mapType;
+                            return new GenericType("Map", new List<SSharpType> { SSharpType.Any, SSharpType.Any });
+                        }
+                    }
+                    if (fnName is "delete" or "excl" or "removed")
+                    {
+                        if (call.Arguments.Count == 2)
+                        {
+                            CheckExpr(call.Arguments[0]);
+                            SSharpType containerType = CheckExpr(call.Arguments[1]);
+                            return containerType;
+                        }
+                    }
+                    if (fnName is "union" or "intersect" or "diff")
+                    {
+                        if (call.Arguments.Count >= 2)
+                        {
+                            SSharpType s1 = CheckExpr(call.Arguments[0]);
+                            CheckExpr(call.Arguments[1]);
+                            return s1;
+                        }
+                    }
+                    if (fnName == "get")
+                    {
+                        if (call.Arguments.Count >= 2)
+                        {
+                            CheckExpr(call.Arguments[0]);
+                            SSharpType mapType = CheckExpr(call.Arguments[1]);
+                            if (mapType is GenericType gt && gt.Name == "Map" && gt.TypeArgs.Count >= 2)
+                            {
+                                return new GenericType("Option", new List<SSharpType> { gt.TypeArgs[1] });
+                            }
+                        }
+                        return new GenericType("Option", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "keys")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType mapType = CheckExpr(call.Arguments[0]);
+                            if (mapType is GenericType gt && gt.Name == "Map" && gt.TypeArgs.Count >= 1)
+                            {
+                                return new GenericType("Set", new List<SSharpType> { gt.TypeArgs[0] });
+                            }
+                        }
+                        return new GenericType("Set", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "values")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType mapType = CheckExpr(call.Arguments[0]);
+                            if (mapType is GenericType gt && gt.Name == "Map" && gt.TypeArgs.Count >= 2)
+                            {
+                                return new GenericType("List", new List<SSharpType> { gt.TypeArgs[1] });
+                            }
+                        }
+                        return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "toList")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType cType = CheckExpr(call.Arguments[0]);
+                            if (cType is GenericType gt)
+                            {
+                                if (gt.Name == "Set" && gt.TypeArgs.Count >= 1)
+                                {
+                                    return new GenericType("List", new List<SSharpType> { gt.TypeArgs[0] });
+                                }
+                                if (gt.Name == "Map" && gt.TypeArgs.Count >= 2)
+                                {
+                                    var tupleType = new GenericType("Tuple2", new List<SSharpType> { gt.TypeArgs[0], gt.TypeArgs[1] });
+                                    return new GenericType("List", new List<SSharpType> { tupleType });
+                                }
+                                if (gt.Name == "List") return cType;
+                            }
+                        }
+                        return new GenericType("List", new List<SSharpType> { SSharpType.Any });
+                    }
+                    if (fnName == "flatten")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType outerType = CheckExpr(call.Arguments[0]);
+                            if (outerType is GenericType gt && gt.TypeArgs.Count >= 1 && gt.TypeArgs[0] is GenericType innerGt)
+                            {
+                                return innerGt;
+                            }
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName == "fst")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType tType = CheckExpr(call.Arguments[0]);
+                            if (tType is GenericType gt && gt.Name.StartsWith("Tuple") && gt.TypeArgs.Count >= 1)
+                            {
+                                return gt.TypeArgs[0];
+                            }
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName == "snd")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType tType = CheckExpr(call.Arguments[0]);
+                            if (tType is GenericType gt && gt.Name.StartsWith("Tuple") && gt.TypeArgs.Count >= 2)
+                            {
+                                return gt.TypeArgs[1];
+                            }
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName == "id")
+                    {
+                        if (call.Arguments.Count >= 1) return CheckExpr(call.Arguments[0]);
+                        return SSharpType.Any;
+                    }
+                    if (fnName == "constVal")
+                    {
+                        if (call.Arguments.Count >= 1)
+                        {
+                            SSharpType a = CheckExpr(call.Arguments[0]);
+                            if (call.Arguments.Count >= 2) CheckExpr(call.Arguments[1]);
+                            return a;
+                        }
+                        return SSharpType.Any;
+                    }
+                    if (fnName is "map" or "filter" or "flatMap")
+                    {
+                        if (call.Arguments.Count >= 2)
+                        {
+                            SSharpType arg1 = CheckExpr(call.Arguments[0]);
+                            SSharpType container = CheckExpr(call.Arguments[1]);
+                            if (container is GenericType cGt)
+                            {
+                                if (cGt.Name == "Option")
+                                {
+                                    if (fnName == "filter") return container;
+                                    if (arg1 is FunctionType ft)
+                                    {
+                                        if (fnName == "map") return new GenericType("Option", new List<SSharpType> { ft.ReturnType });
+                                        if (fnName == "flatMap") return ft.ReturnType;
+                                    }
+                                    return container;
+                                }
+                                if (cGt.Name == "Set")
+                                {
+                                    if (fnName == "filter") return container;
+                                    if (arg1 is FunctionType ft)
+                                    {
+                                        if (fnName == "map") return new GenericType("Set", new List<SSharpType> { ft.ReturnType });
+                                        if (fnName == "flatMap" && ft.ReturnType is GenericType retGt && retGt.Name == "Set") return retGt;
+                                    }
+                                    return container;
+                                }
+                                if (cGt.Name == "Map")
+                                {
+                                    if (fnName == "filter") return container;
+                                    if (arg1 is FunctionType ft)
+                                    {
+                                        if (fnName == "map" && ft.ReturnType is GenericType retTuple && retTuple.Name == "Tuple2" && retTuple.TypeArgs.Count >= 2)
+                                        {
+                                            return new GenericType("Map", new List<SSharpType> { retTuple.TypeArgs[0], retTuple.TypeArgs[1] });
+                                        }
+                                        if (fnName == "flatMap" && ft.ReturnType is GenericType retMap && retMap.Name == "Map") return retMap;
+                                    }
+                                    return container;
+                                }
+                            }
+                        }
+                    }
                 }
                 if (calleeType is FunctionType funType)
                 {
@@ -995,6 +1373,24 @@ public class TypeChecker
             var nonLazyNode = node with { IsLazy = false };
             return new ByNameType(ResolveType(nonLazyNode));
         }
+
+        // Transparent type alias expansion (e.g. Predicate[Int] → Fun[Int, Boolean])
+        if (_typeAliases.TryGetValue(node.Name, out var alias))
+        {
+            TypeNode target = alias.Target;
+            // If the alias has type parameters, substitute them with the provided type args
+            if (alias.TypeParams.Count > 0 && node.TypeArgs.Count == alias.TypeParams.Count)
+            {
+                var subst = new Dictionary<string, TypeNode>();
+                for (int i = 0; i < alias.TypeParams.Count; i++)
+                {
+                    subst[alias.TypeParams[i].Name] = node.TypeArgs[i];
+                }
+                target = SubstituteTypeNode(target, subst);
+            }
+            return ResolveType(target);
+        }
+
         if (node.Name == "Int") return SSharpType.Int;
         if (node.Name == "Double") return SSharpType.Double;
         if (node.Name == "String") return SSharpType.String;
@@ -1026,6 +1422,23 @@ public class TypeChecker
         }
         return new PrimitiveType(node.Name);
     }
+
+    /// <summary>
+    /// Recursively substitutes free type variable names in a TypeNode using the given map.
+    /// Used when expanding parameterized type aliases.
+    /// </summary>
+    private static TypeNode SubstituteTypeNode(TypeNode node, Dictionary<string, TypeNode> subst)
+    {
+        // Substitute a bare type variable (no type args)
+        if (node.TypeArgs.Count == 0 && subst.TryGetValue(node.Name, out var replacement))
+        {
+            return node.IsLazy ? replacement with { IsLazy = true } : replacement;
+        }
+        // Recursively substitute inside type args
+        var newArgs = node.TypeArgs.ConvertAll(arg => SubstituteTypeNode(arg, subst));
+        return node with { TypeArgs = newArgs };
+    }
+
 
     private bool IsSubtype(SSharpType sub, SSharpType super)
     {

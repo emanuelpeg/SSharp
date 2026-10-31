@@ -17,6 +17,13 @@ public record Program(List<Decl> Decls) : ASTNode;
 
 public record ImportDecl(string Path) : Decl;
 
+/// <summary>
+/// Represents a type alias declaration: <c>type Name[A, B, ...] = TargetType</c>.
+/// Type aliases are transparent — they are expanded during type checking and
+/// produce no C# output during code generation (type erasure).
+/// </summary>
+public record TypeAliasDecl(string Name, List<TypeParam> TypeParams, TypeNode Target, int Line, int Column) : Decl;
+
 public record ExprDecl(Expr Expression) : Decl;
 
 public record ValDecl(string Name, TypeNode? Type, Expr Value, int Line, int Column, bool IsLazy = false) : Decl;

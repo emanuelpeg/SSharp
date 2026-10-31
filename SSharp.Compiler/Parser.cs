@@ -112,6 +112,7 @@ public class Parser
             }
         }
 
+        if (Match(TokenType.TypeAlias)) return ParseTypeAliasDecl();
         if (Match(TokenType.Def)) return ParseFunDecl(isTailRec);
         if (isTailRec)
         {
@@ -138,6 +139,16 @@ public class Parser
         Token path = Consume(TokenType.StringLiteral, "Expected string literal after 'import'.");
         Match(TokenType.Semicolon);
         return new ImportDecl((string)path.Value!);
+    }
+
+    private Decl ParseTypeAliasDecl()
+    {
+        Token name = Consume(TokenType.Identifier, "Expected type alias name after 'type'.");
+        List<TypeParam> typeParams = ParseTypeParams();
+        Consume(TokenType.Assign, "Expected '=' after type alias name.");
+        TypeNode target = ParseType();
+        Match(TokenType.Semicolon);
+        return new TypeAliasDecl(name.Lexeme, typeParams, target, name.Line, name.Column);
     }
 
     private List<TypeParam> ParseTypeParams()
