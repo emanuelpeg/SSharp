@@ -29,7 +29,8 @@ public class Lexer
         { "false", TokenType.False },
         { "for", TokenType.For },
         { "yield", TokenType.Yield },
-        { "type", TokenType.TypeAlias }
+        { "type", TokenType.TypeAlias },
+        { "data", TokenType.Data }
     };
 
     public Lexer(string source)
@@ -87,7 +88,7 @@ public class Lexer
             case '%': return MakeToken(TokenType.Percent);
             case '|':
                 if (Match('>')) return MakeToken(TokenType.Pipe);
-                return MakeToken(TokenType.Error, null, "Unexpected character '|'");
+                return MakeToken(TokenType.Bar);
 
             case '/':
                 if (Match('/'))

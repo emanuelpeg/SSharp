@@ -105,6 +105,19 @@ public class CodeGenerator
             {
                 _typeAliases[alias.Name] = alias;
             }
+            else if (decl is DataDecl data)
+            {
+                var extendsNode = new TypeNode(data.Name, data.TypeParams.ConvertAll(tp => new TypeNode(tp.Name)));
+                foreach (var ctor in data.Constructors)
+                {
+                    var ctorCls = new ClassDecl(ctor.Name, data.TypeParams, ctor.Params, extendsNode, IsCase: true, ctor.Line, ctor.Column);
+                    _classDecls[ctorCls.Name] = ctorCls;
+                    if (ctorCls.ConstructorParams.Count == 0)
+                    {
+                        _caseObjects.Add(ctorCls.Name);
+                    }
+                }
+            }
         }
 
         var sb = new StringBuilder();
@@ -116,10 +129,10 @@ public class CodeGenerator
         sb.AppendLine("namespace SSharp.Generated;");
         sb.AppendLine();
 
-        // 1. Generate traits and classes
+        // 1. Generate traits, classes and native ADTs
         foreach (var decl in program.Decls)
         {
-            if (decl is TraitDecl or ClassDecl)
+            if (decl is TraitDecl or ClassDecl or DataDecl)
             {
                 sb.AppendLine(GenerateDecl(decl, indent: 0));
                 sb.AppendLine();
@@ -130,7 +143,7 @@ public class CodeGenerator
         sb.AppendLine("public static class Program");
         sb.AppendLine("{");
 
-        // Generate factory methods for case classes to allow calling them without "new"
+        // Generate factory methods for case classes and native ADT constructors
         foreach (var decl in program.Decls)
         {
             if (decl is ClassDecl cls && cls.IsCase && cls.ConstructorParams.Count > 0)
@@ -141,9 +154,33 @@ public class CodeGenerator
                 string arguments = string.Join(", ", cls.ConstructorParams.Select(p => p.Name));
                 sb.AppendLine($"    public static {typeName} {cls.Name}{tparams}({parameters}) => new {typeName}({arguments});");
             }
+            else if (decl is DataDecl data)
+            {
+                string tparams = data.TypeParams.Count > 0 ? $"<{string.Join(", ", data.TypeParams.Select(tp => tp.Name))}>" : "";
+                string baseType = $"{data.Name}{tparams}";
+
+                foreach (var ctor in data.Constructors)
+                {
+                    if (ctor.Params.Count > 0)
+                    {
+                        string ctorTypeName = $"{ctor.Name}{tparams}";
+                        string parameters = string.Join(", ", ctor.Params.Select(p => $"{MapTypeNode(p.Type)} {EscapeIdentifier(p.Name)}"));
+                        string arguments = string.Join(", ", ctor.Params.Select(p => EscapeIdentifier(p.Name)));
+                        sb.AppendLine($"    public static {ctorTypeName} {ctor.Name}{tparams}({parameters}) => new {ctorTypeName}({arguments});");
+
+                        // Generate pure field selector functions: radius(shape), width(shape), etc.
+                        foreach (var p in ctor.Params)
+                        {
+                            string fieldType = MapTypeNode(p.Type);
+                            string paramName = EscapeIdentifier(p.Name);
+                            sb.AppendLine($"    public static {fieldType} {paramName}{tparams}({baseType} obj) => obj is {ctorTypeName} c ? c.{paramName} : throw new System.InvalidOperationException(\"Field '{paramName}' does not exist on \" + obj.GetType().Name);");
+                        }
+                    }
+                }
+            }
         }
 
-        if (program.Decls.Any(d => d is ClassDecl cls && cls.IsCase && cls.ConstructorParams.Count > 0))
+        if (program.Decls.Any(d => (d is ClassDecl cls && cls.IsCase && cls.ConstructorParams.Count > 0) || (d is DataDecl data && data.Constructors.Any(c => c.Params.Count > 0))))
         {
             sb.AppendLine();
         }
@@ -213,6 +250,60 @@ public class CodeGenerator
                         tparams = "";
                     }
                     return $"{spaces}public interface {trait.Name}{tparams} {{}}";
+                }
+
+            case DataDecl data:
+                {
+                    var sb = new StringBuilder();
+                    string tparams;
+                    if (data.TypeParams.Count > 0)
+                    {
+                        var tparamStrs = data.TypeParams.Select(tp => tp.Variance switch
+                        {
+                            Variance.Covariant     => $"out {tp.Name}",
+                            Variance.Contravariant => $"in {tp.Name}",
+                            _                      => tp.Name
+                        });
+                        tparams = $"<{string.Join(", ", tparamStrs)}>";
+                    }
+                    else
+                    {
+                        tparams = "";
+                    }
+
+                    // Base interface for the sum type
+                    sb.AppendLine($"{spaces}public interface {data.Name}{tparams} {{}}");
+
+                    // Base interface instantiation for record implementation (without out/in variance annotations)
+                    string baseInterfaceUse = data.TypeParams.Count > 0
+                        ? $"{data.Name}<{string.Join(", ", data.TypeParams.Select(tp => tp.Name))}>"
+                        : data.Name;
+
+                    string ctorTParams = data.TypeParams.Count > 0
+                        ? $"<{string.Join(", ", data.TypeParams.Select(tp => tp.Name))}>"
+                        : "";
+
+                    foreach (var ctor in data.Constructors)
+                    {
+                        sb.AppendLine();
+                        if (ctor.Params.Count == 0)
+                        {
+                            // Parameterless case object (e.g. Nil)
+                            sb.AppendLine($"{spaces}public record {ctor.Name}{ctorTParams} : {baseInterfaceUse}");
+                            sb.AppendLine($"{spaces}{{");
+                            sb.AppendLine($"{spaces}    private {ctor.Name}() {{}}");
+                            sb.AppendLine($"{spaces}    public static {ctor.Name}{ctorTParams} Instance {{ get; }} = new {ctor.Name}{ctorTParams}();");
+                            sb.Append($"{spaces}}}");
+                        }
+                        else
+                        {
+                            // Case record (e.g. Circle(double radius))
+                            string parameters = string.Join(", ", ctor.Params.Select(p => $"{MapTypeNode(p.Type)} {EscapeIdentifier(p.Name)}"));
+                            sb.Append($"{spaces}public record {ctor.Name}{ctorTParams}({parameters}) : {baseInterfaceUse};");
+                        }
+                    }
+
+                    return sb.ToString();
                 }
 
             case ClassDecl cls:
@@ -666,6 +757,42 @@ public class CodeGenerator
                         return $"Some<{valType}>({someArgsStr})";
                     }
 
+                    // Handle Left(value) => Left<L, R>(value)
+                    if (call.Callee is IdentifierExpr leftId && leftId.Name == "Left")
+                    {
+                        string leftArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string lType = "object";
+                        string rType = "object";
+                        if (_resolvedTypes.TryGetValue(call, out var callT) && callT is GenericType gt && gt.Name == "Either" && gt.TypeArgs.Count == 2)
+                        {
+                            lType = MapType(gt.TypeArgs[0]);
+                            rType = MapType(gt.TypeArgs[1]);
+                        }
+                        else if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var valT))
+                        {
+                            lType = MapType(valT);
+                        }
+                        return $"Left<{lType}, {rType}>({leftArgsStr})";
+                    }
+
+                    // Handle Right(value) => Right<L, R>(value)
+                    if (call.Callee is IdentifierExpr rightId && rightId.Name == "Right")
+                    {
+                        string rightArgsStr = string.Join(", ", call.Arguments.Select(GenerateExpr));
+                        string lType = "object";
+                        string rType = "object";
+                        if (_resolvedTypes.TryGetValue(call, out var callT) && callT is GenericType gt && gt.Name == "Either" && gt.TypeArgs.Count == 2)
+                        {
+                            lType = MapType(gt.TypeArgs[0]);
+                            rType = MapType(gt.TypeArgs[1]);
+                        }
+                        else if (call.Arguments.Count > 0 && _resolvedTypes.TryGetValue(call.Arguments[0], out var valT))
+                        {
+                            rType = MapType(valT);
+                        }
+                        return $"Right<{lType}, {rType}>({rightArgsStr})";
+                    }
+
                     // Handle Cons(head, tail) => Cons<T>(head, tail)
                     if (call.Callee is IdentifierExpr consId && consId.Name == "Cons")
                     {
@@ -1001,12 +1128,12 @@ public class CodeGenerator
                             }
                             return $"SSharp.Runtime.{cons.Name}<{typeArgStr}>";
                         }
-                        if (cons.Name is "Cons" or "Some")
+                        if (cons.Name is "Cons" or "Some" or "Left" or "Right")
                         {
                             string typeArgStr = "object";
                             if (matchedType is GenericType gt && gt.TypeArgs.Count > 0)
                             {
-                                typeArgStr = MapType(gt.TypeArgs[0]);
+                                typeArgStr = string.Join(", ", gt.TypeArgs.Select(MapType));
                             }
                             
                             var subPatternsStrs = new List<string>();
@@ -1016,11 +1143,25 @@ public class CodeGenerator
                                 var tailType = matchedType;
                                 if (cons.SubPatterns.Count > 0) subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[0], headType));
                                 if (cons.SubPatterns.Count > 1) subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[1], tailType));
+                                return $"SSharp.Runtime.Cons<{MapType(headType)}>({string.Join(", ", subPatternsStrs)})";
                             }
                             else if (cons.Name == "Some")
                             {
                                 var valType = matchedType is GenericType gt2 && gt2.TypeArgs.Count > 0 ? gt2.TypeArgs[0] : SSharpType.Any;
                                 if (cons.SubPatterns.Count > 0) subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[0], valType));
+                                return $"SSharp.Runtime.Some<{MapType(valType)}>({string.Join(", ", subPatternsStrs)})";
+                            }
+                            else if (cons.Name == "Left")
+                            {
+                                var valType = matchedType is GenericType gt2 && gt2.TypeArgs.Count > 0 ? gt2.TypeArgs[0] : SSharpType.Any;
+                                if (cons.SubPatterns.Count > 0) subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[0], valType));
+                                return $"SSharp.Runtime.Left<{typeArgStr}>({string.Join(", ", subPatternsStrs)})";
+                            }
+                            else if (cons.Name == "Right")
+                            {
+                                var valType = matchedType is GenericType gt2 && gt2.TypeArgs.Count > 1 ? gt2.TypeArgs[1] : (matchedType is GenericType gt1 && gt1.TypeArgs.Count == 1 ? gt1.TypeArgs[0] : SSharpType.Any);
+                                if (cons.SubPatterns.Count > 0) subPatternsStrs.Add(GeneratePattern(cons.SubPatterns[0], valType));
+                                return $"SSharp.Runtime.Right<{typeArgStr}>({string.Join(", ", subPatternsStrs)})";
                             }
 
                             return $"SSharp.Runtime.{cons.Name}<{typeArgStr}>({string.Join(", ", subPatternsStrs)})";
@@ -1162,6 +1303,9 @@ public class CodeGenerator
                 "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Either" => $"SSharp.Runtime.SSharpEither<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Left" => $"SSharp.Runtime.Left<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
+                "Right" => $"SSharp.Runtime.Right<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 "Tuple2" or "Tuple3" or "Tuple4" or "Tuple5" or "Tuple6" or "Tuple7" or "Tuple8" => $"SSharp.Runtime.SSharp{gt.Name}<{string.Join(", ", gt.TypeArgs.Select(MapType))}>",
                 _ => $"{gt.Name}<{string.Join(", ", gt.TypeArgs.Select(MapType))}>"
             },
@@ -1199,6 +1343,9 @@ public class CodeGenerator
             "Nil" => $"SSharp.Runtime.Nil<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Set" => $"SSharp.Runtime.SSharpSet<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Map" => $"SSharp.Runtime.SSharpMap<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Either" => $"SSharp.Runtime.SSharpEither<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Left" => $"SSharp.Runtime.Left<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
+            "Right" => $"SSharp.Runtime.Right<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Tuple2" or "Tuple3" or "Tuple4" or "Tuple5" or "Tuple6" or "Tuple7" or "Tuple8" => $"SSharp.Runtime.SSharp{node.Name}<{string.Join(", ", node.TypeArgs.Select(MapTypeNode))}>",
             "Fun" => node.TypeArgs.Count switch
             {

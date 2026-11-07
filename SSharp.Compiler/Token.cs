@@ -26,6 +26,7 @@ public enum TokenType
     For,
     Yield,
     TypeAlias,  // type
+    Data,       // data
 
     // Operators
     Plus,       // +
@@ -46,6 +47,7 @@ public enum TokenType
     Bang,       // !
     At,         // @
     Pipe,       // |>
+    Bar,        // |
 
     // Delimiters
     LParen,     // (

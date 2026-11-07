@@ -92,14 +92,6 @@ public sealed class SSharpSet<T>
         return acc;
     }
 
-    public void Foreach(Action<T> action)
-    {
-        foreach (var elem in _inner)
-        {
-            action(elem);
-        }
-    }
-
     // ── Conversions ───────────────────────────────────────────────────────────
 
     public SSharpList<T> ToList()

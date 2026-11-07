@@ -55,6 +55,18 @@ public record TraitDecl(string Name, List<TypeParam> TypeParams, int Line, int C
 
 public record ClassDecl(string Name, List<TypeParam> TypeParams, List<Param> ConstructorParams, TypeNode? ExtendsType, bool IsCase, int Line, int Column) : Decl;
 
+/// <summary>
+/// A constructor case in a native ADT declaration: <c>Circle(radius: Double)</c> or <c>Nil</c>.
+/// </summary>
+public record DataConstructor(string Name, List<Param> Params, int Line, int Column);
+
+/// <summary>
+/// Represents a native Functional Algebraic Data Type (Sum Type):
+/// <c>data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double)</c>
+/// </summary>
+public record DataDecl(string Name, List<TypeParam> TypeParams, List<DataConstructor> Constructors, int Line, int Column) : Decl;
+
+
 // Expressions
 public abstract record Expr : ASTNode;
 

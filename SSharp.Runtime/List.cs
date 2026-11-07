@@ -65,16 +65,6 @@ public abstract record SSharpList<T>
         return acc;
     }
 
-    public void Foreach(Action<T> action)
-    {
-        var curr = this;
-        while (curr is Cons<T> cons)
-        {
-            action(cons.Head);
-            curr = cons.Tail;
-        }
-    }
-
     // ── Element access (internal — use head(xs) / tail(xs) from Prelude) ─────
 
     /// <summary>Internal: use free function head(xs) in SSharp code.</summary>

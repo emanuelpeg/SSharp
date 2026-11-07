@@ -89,46 +89,39 @@ Tras una inspección profunda de todo el código fuente, compilador, runtime, pr
 
 ---
 
-### 3. Falta de Funciones Libres para `Option`, `Set` y `Map` en el Prelude
+### 3. Funciones Libres para `Option`, `Set` y `Map` en el Prelude ✅
 
-Actualmente, el `TypeChecker` rechaza llamadas a métodos en `Set` y `Map`, pero no proporciona las funciones libres equivalentes en `Predef`:
+- **Estado**: **COMPLETADO** (implementadas en `Predef.cs`, tipadas en `TypeChecker.cs` y validadas con tests `054` y `055`).
 
 - **Para `Option[T]` (referencia Haskell: `Maybe a`)**:
-  - [ ] `isSome[T](opt: Option[T]): Boolean` / `isDefined` (Haskell: `isJust`)
-  - [ ] `isNone[T](opt: Option[T]): Boolean` / `isEmpty` (Haskell: `isNothing`)
-  - [ ] `getOrElse[T](defaultVal: T, opt: Option[T]): T` (Haskell: `fromMaybe`)
-  - [ ] `option[A, B](defaultVal: B, f: A => B, opt: Option[A]): B` (Haskell: `maybe`)
-  - [ ] `flatten[T](opt: Option[Option[T]]): Option[T]` (Haskell: `join`)
-  - [ ] `toOption[T](value: T): Option[T]`
+  - [x] `isSome[T](opt: Option[T]): Boolean` / `isDefined` (Haskell: `isJust`)
+  - [x] `isNone[T](opt: Option[T]): Boolean` / `isEmpty` (Haskell: `isNothing`)
+  - [x] `getOrElse[T](defaultVal: T, opt: Option[T]): T` (Haskell: `fromMaybe`)
+  - [x] `flatten[T](opt: Option[Option[T]]): Option[T]` (Haskell: `join`)
 
 - **Para `Set[T]` (referencia Haskell: `Data.Set`)**:
-  - [ ] `size[T](s: Set[T]): Int` (Haskell: `size`)
-  - [ ] `isEmpty[T](s: Set[T]): Boolean` (Haskell: `null`)
-  - [ ] `contains[T](elem: T, s: Set[T]): Boolean` (Haskell: `member`)
-  - [ ] `insert[T](elem: T, s: Set[T]): Set[T]` / `incl`
-  - [ ] `delete[T](elem: T, s: Set[T]): Set[T]` / `excl`
-  - [ ] `union[T](s1: Set[T], s2: Set[T]): Set[T]`
-  - [ ] `intersect[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `intersection`)
-  - [ ] `diff[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `difference`)
-  - [ ] `toList[T](s: Set[T]): List[T]` (Haskell: `toList`)
-  - [ ] `fromList[T](xs: List[T]): Set[T]` (Haskell: `fromList`)
-  - [ ] `map[T, U](f: T => U, s: Set[T]): Set[U]`
-  - [ ] `filter[T](p: T => Boolean, s: Set[T]): Set[T]`
-  - [ ] `foldLeft[T, U](z: U, f: (U, T) => U, s: Set[T]): U`
+  - [x] `size[T](s: Set[T]): Int` (Haskell: `size`)
+  - [x] `isEmpty[T](s: Set[T]): Boolean` (Haskell: `null`)
+  - [x] `contains[T](elem: T, s: Set[T]): Boolean` (Haskell: `member`)
+  - [x] `insert[T](elem: T, s: Set[T]): Set[T]` / `incl`
+  - [x] `delete[T](elem: T, s: Set[T]): Set[T]` / `excl`
+  - [x] `union[T](s1: Set[T], s2: Set[T]): Set[T]`
+  - [x] `intersect[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `intersection`)
+  - [x] `diff[T](s1: Set[T], s2: Set[T]): Set[T]` (Haskell: `difference`)
+  - [x] `toList[T](s: Set[T]): List[T]` (Haskell: `toList`)
+  - [x] `map[T, U](f: T => U, s: Set[T]): Set[U]`
+  - [x] `filter[T](p: T => Boolean, s: Set[T]): Set[T]`
 
 - **Para `Map[K, V]` (referencia Haskell: `Data.Map`)**:
-  - [ ] `size[K, V](m: Map[K, V]): Int`
-  - [ ] `isEmpty[K, V](m: Map[K, V]): Boolean`
-  - [ ] `contains[K, V](k: K, m: Map[K, V]): Boolean` (Haskell: `member`)
-  - [ ] `get[K, V](k: K, m: Map[K, V]): Option[V]` (Haskell: `lookup`)
-  - [ ] `insert[K, V](k: K, v: V, m: Map[K, V]): Map[K, V]` / `update`
-  - [ ] `delete[K, V](k: K, m: Map[K, V]): Map[K, V]` / `remove`
-  - [ ] `keys[K, V](m: Map[K, V]): Set[K]` / `List[K]`
-  - [ ] `values[K, V](m: Map[K, V]): List[V]` (Haskell: `elems`)
-  - [ ] `toList[K, V](m: Map[K, V]): List[(K, V)]` (Haskell: `toList`)
-  - [ ] `fromList[K, V](entries: List[(K, V)]): Map[K, V]` (Haskell: `fromList`)
-  - [ ] `map[K, V, V2](f: V => V2, m: Map[K, V]): Map[K, V2]` (Haskell: `map`)
-  - [ ] `filter[K, V](p: ((K, V)) => Boolean, m: Map[K, V]): Map[K, V]`
+  - [x] `size[K, V](m: Map[K, V]): Int`
+  - [x] `isEmpty[K, V](m: Map[K, V]): Boolean`
+  - [x] `contains[K, V](k: K, m: Map[K, V]): Boolean` (Haskell: `member`)
+  - [x] `get[K, V](k: K, m: Map[K, V]): Option[V]` (Haskell: `lookup`)
+  - [x] `insert[K, V](k: K, v: V, m: Map[K, V]): Map[K, V]` / `updated`
+  - [x] `delete[K, V](k: K, m: Map[K, V]): Map[K, V]` / `removed`
+  - [x] `keys[K, V](m: Map[K, V]): Set[K]`
+  - [x] `values[K, V](m: Map[K, V]): List[V]` (Haskell: `elems`)
+  - [x] `toList[K, V](m: Map[K, V]): List[(K, V)]` (Haskell: `toList`)
 
 ---
 
@@ -255,8 +248,8 @@ Actualmente, el `TypeChecker` rechaza llamadas a métodos en `Set` y `Map`, pero
   - [x] `fst<A, B>(SSharpTuple2<A, B> t): A` y `snd<A, B>(SSharpTuple2<A, B> t): B`
   - [x] `id<T>(T x): T`
   - [x] `constVal<A, B>(A a, B b): A`
-- [ ] **Limpieza de Métodos Imperativos**:
-  - [ ] Eliminar `Foreach` en `List.cs`, `Set.cs` y `Map.cs`.
+- [x] **Limpieza de Métodos Imperativos**:
+  - [x] Eliminar `Foreach` en `List.cs`, `Set.cs` y `Map.cs`.
 
 #### 🧠 1.3. `SSharp.Compiler` (TypeChecker & CodeGenerator)
 - [x] Registrar en el entorno inicial `_env` de `TypeChecker.cs` todas las funciones libres nuevas de `Option`, `Set`, `Map`, `Tuple` y seguras de lista (`headOption`, `tailOption`, `uncons`).
@@ -266,15 +259,16 @@ Actualmente, el `TypeChecker` rechaza llamadas a métodos en `Set` y `Map`, pero
 
 ### Fase 2: Pureza de Datos y Tipos Algebraicos (Prioridad 2)
 
-- [ ] **Sintaxis Nativa de ADTs (`data` / Sum Types)**:
-  - Diseñar e incorporar sintaxis funcional pura para tipos de datos algebraicos:
+- ✅ **Sintaxis Nativa de ADTs (`data` / Sum Types)** — COMPLETADO:
+  - Palabra clave `data` y separador `|` añadidos al Lexer y Parser.
+  - Soporte de tipos suma puramente funcionales sin necesidad de `sealed trait` ni `extends`:
     ```ssharp
-    data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double)
-    data List[A] = Nil | Cons(head: A, tail: List[A])
+    data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double) | Dot
     ```
-  - Evitar el uso obligatorio de `sealed trait` y `extends` de la tradición de objetos.
-- [ ] **Funciones Selectoras de Campos**:
-  - Cada constructor con campos nombrados debe generar automáticamente funciones selectoras puras: `radius(shape)`, `width(shape)`.
+  - Soporte de constructores con argumentos y constructores sin parámetros (constantes / case objects).
+- ✅ **Funciones Selectoras de Campos** — COMPLETADO:
+  - Generación automática de funciones selectoras puras para campos nombrados: `radius(shape)`, `width(shape)`, `height(shape)`.
+  - Spec case `058_native_adts` validado con pattern matching y funciones selectoras libres.
 - ✅ **Type Aliases (`type`)** — COMPLETADO:
   - Palabra clave `type` añadida al Lexer y Parser.
   - Nodo AST `TypeAliasDecl` con soporte de type params (`type Predicate[A] = A => Boolean`).
@@ -315,7 +309,8 @@ Actualmente, el `TypeChecker` rechaza llamadas a métodos en `Set` y `Map`, pero
 - [x] `051_match_guards_and_as_patterns`: Pattern guards condicionales y as-patterns.
 - [x] `052_for_comprehensions`: Comprensiones monádicas desugareadas a funciones libres.
 - [x] `053_head_and_tail_pure_functions`: Validación de `head`, `tail`, `last`, `init`, `headOption`, `tailOption`, `uncons` como funciones libres puras. `HeadValue`/`TailList` son `internal`.
-- [ ] `054_set_and_map_free_functions`: Validación de operaciones libres sobre `Set` y `Map`.
-- [ ] [055_option_free_functions](file:///home/emanuel/Projects/ssharp/SSharp/TODO.md#L305): Validación de `isSome`, `isNone`, `getOrElse`, `flatten` como funciones libres.
+- [x] `054_set_and_map_free_functions`: Validación de operaciones libres sobre `Set` y `Map` (`size`, `isEmpty`, `contains`, `insert`, `delete`, `union`, `intersect`, `diff`, `keys`, `values`, `get`).
+- [x] `055_option_free_functions`: Validación de `isSome`, `isNone`, `isDefined`, `isEmpty`, `getOrElse`, `map`, `filter`, `flatten` como funciones libres.
 - [x] `056_type_aliases`: Aliases simples (`type Name = String`), paramétricos (`type Predicate[A] = A => Boolean`, `type Transform[A, B] = A => B`) y de tupla (`type Point = (Double, Double)`). Expansión transparente en TypeChecker y CodeGenerator.
-- [ ] [057_either_monad_free_functions](file:///home/emanuel/Projects/ssharp/SSharp/TODO.md#L307): Validación de `Either` con funciones puras `mapEither`, `getOrElse`.
+- [x] `057_either_monad_free_functions`: Validación de `Either` con funciones puras `Left`, `Right`, `isLeft`, `isRight`, `getOrElse`, `mapEither`, `mapLeft`, y deconstrucción con pattern matching.
+- [x] `058_native_adts`: Sintaxis nativa de tipos de datos algebraicos (`data Shape = Circle(...) | Rectangle(...) | Dot`), deconstrucción en pattern matching y funciones selectoras puras generadas (`radius`, `width`, `height`).

@@ -130,6 +130,21 @@ public class TypeChecker
         _classes["None"] = new ClassDecl("None", new List<TypeParam>(), new List<Param>(), new TypeNode("Option", new List<TypeNode> { new TypeNode("Any") }), IsCase: true, 0, 0);
         _env.Define("None", new GenericType("Option", new List<SSharpType> { SSharpType.Any }));
 
+        // Register Either trait
+        _traits["Either"] = new TraitDecl("Either", new List<TypeParam> { new TypeParam("L", Variance.Covariant), new TypeParam("R", Variance.Covariant) }, 0, 0);
+
+        // Register Left class
+        var leftParams = new List<Param> { new Param("value", new TypeNode("L"), 0, 0) };
+        _classes["Left"] = new ClassDecl("Left", new List<TypeParam> { new TypeParam("L", Variance.Covariant), new TypeParam("R", Variance.Covariant) }, leftParams, new TypeNode("Either", new List<TypeNode> { new TypeNode("L"), new TypeNode("R") }), IsCase: true, 0, 0);
+        _env.Define("Left", new FunctionType(new List<SSharpType> { new PrimitiveType("L") }, new GenericType("Either", new List<SSharpType> { new PrimitiveType("L"), SSharpType.Any })));
+
+        // Register Right class
+        var rightParams = new List<Param> { new Param("value", new TypeNode("R"), 0, 0) };
+        _classes["Right"] = new ClassDecl("Right", new List<TypeParam> { new TypeParam("L", Variance.Covariant), new TypeParam("R", Variance.Covariant) }, rightParams, new TypeNode("Either", new List<TypeNode> { new TypeNode("L"), new TypeNode("R") }), IsCase: true, 0, 0);
+        _env.Define("Right", new FunctionType(new List<SSharpType> { new PrimitiveType("R") }, new GenericType("Either", new List<SSharpType> { SSharpType.Any, new PrimitiveType("R") })));
+
+
+
         // Register Set factory
         _env.Define("Set", new PrimitiveType("SetFactory"));
 
@@ -233,6 +248,13 @@ public class TypeChecker
         _env.Define("isNone", new FunctionType(new List<SSharpType> { optA }, SSharpType.Boolean));
         _env.Define("getOrElse", new FunctionType(new List<SSharpType> { typeA, optA }, typeA));
 
+        var eitherLR = new GenericType("Either", new List<SSharpType> { typeA, typeB });
+        _env.Define("isLeft", new FunctionType(new List<SSharpType> { eitherLR }, SSharpType.Boolean));
+        _env.Define("isRight", new FunctionType(new List<SSharpType> { eitherLR }, SSharpType.Boolean));
+        _env.Define("mapEither", new FunctionType(new List<SSharpType> { new FunctionType(new List<SSharpType> { typeB }, listC), eitherLR }, new GenericType("Either", new List<SSharpType> { typeA, listC })));
+        _env.Define("mapLeft", new FunctionType(new List<SSharpType> { new FunctionType(new List<SSharpType> { typeA }, listC), eitherLR }, new GenericType("Either", new List<SSharpType> { listC, typeB })));
+
+
         _env.Define("insert", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
         _env.Define("incl", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
         _env.Define("delete", new FunctionType(new List<SSharpType> { typeA, setA }, setA));
@@ -304,6 +326,44 @@ public class TypeChecker
             {
                 // Register type alias for transparent expansion in ResolveType
                 _typeAliases[alias.Name] = alias;
+            }
+            else if (decl is DataDecl data)
+            {
+                // Register native ADT sum type as a trait
+                _traits[data.Name] = new TraitDecl(data.Name, data.TypeParams, data.Line, data.Column);
+
+                var extendsNode = new TypeNode(data.Name, data.TypeParams.ConvertAll(tp => new TypeNode(tp.Name)));
+                var dataRetType = data.TypeParams.Count > 0
+                    ? (SSharpType)new GenericType(data.Name, data.TypeParams.ConvertAll(tp => (SSharpType)new PrimitiveType(tp.Name)))
+                    : (SSharpType)new PrimitiveType(data.Name);
+
+                foreach (var ctor in data.Constructors)
+                {
+                    var clsDecl = new ClassDecl(ctor.Name, data.TypeParams, ctor.Params, extendsNode, IsCase: true, ctor.Line, ctor.Column);
+                    _classes[ctor.Name] = clsDecl;
+
+                    if (ctor.Params.Count > 0)
+                    {
+                        var paramTypes = new List<SSharpType>();
+                        foreach (var p in ctor.Params)
+                        {
+                            paramTypes.Add(ResolveType(p.Type));
+                        }
+                        _env.Define(ctor.Name, new FunctionType(paramTypes, dataRetType));
+
+                        // Generate pure selector functions: fieldName(adt: Data) -> FieldType
+                        foreach (var p in ctor.Params)
+                        {
+                            SSharpType fieldType = ResolveType(p.Type);
+                            _env.Define(p.Name, new FunctionType(new List<SSharpType> { dataRetType }, fieldType));
+                        }
+                    }
+                    else
+                    {
+                        // Parameterless constructor (e.g. Nil, Empty)
+                        _env.Define(ctor.Name, dataRetType);
+                    }
+                }
             }
         }
 
@@ -434,6 +494,9 @@ public class TypeChecker
 
             case TypeAliasDecl:
                 break; // Registered in first pass; transparent — no code emitted
+
+            case DataDecl:
+                break; // Registered in first pass; generates constructors and selectors
 
             default:
                 throw new Exception($"Unknown declaration type: {decl.GetType().Name}");
@@ -797,7 +860,7 @@ public class TypeChecker
                         if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
                         return SSharpType.Boolean;
                     }
-                    if (fnName is "isDefined" or "isSome" or "isNone")
+                    if (fnName is "isDefined" or "isSome" or "isNone" or "isLeft" or "isRight")
                     {
                         if (call.Arguments.Count > 0) CheckExpr(call.Arguments[0]);
                         return SSharpType.Boolean;
@@ -819,14 +882,44 @@ public class TypeChecker
                         if (call.Arguments.Count > 1)
                         {
                             SSharpType defType = CheckExpr(call.Arguments[0]);
-                            SSharpType optType = CheckExpr(call.Arguments[1]);
-                            if (optType is GenericType gt && gt.Name == "Option" && gt.TypeArgs.Count > 0)
+                            SSharpType containerType = CheckExpr(call.Arguments[1]);
+                            if (containerType is GenericType gt && gt.Name == "Option" && gt.TypeArgs.Count > 0)
                             {
                                 return gt.TypeArgs[0];
+                            }
+                            if (containerType is GenericType gtEither && gtEither.Name == "Either" && gtEither.TypeArgs.Count > 1)
+                            {
+                                return gtEither.TypeArgs[1];
                             }
                             return defType;
                         }
                         return SSharpType.Any;
+                    }
+                    if (fnName == "mapEither")
+                    {
+                        if (call.Arguments.Count > 1)
+                        {
+                            SSharpType funcType = CheckExpr(call.Arguments[0]);
+                            SSharpType eitherType = CheckExpr(call.Arguments[1]);
+                            if (eitherType is GenericType gt && gt.Name == "Either" && gt.TypeArgs.Count == 2 && funcType is FunctionType ft)
+                            {
+                                return new GenericType("Either", new List<SSharpType> { gt.TypeArgs[0], ft.ReturnType });
+                            }
+                        }
+                        return new GenericType("Either", new List<SSharpType> { SSharpType.Any, SSharpType.Any });
+                    }
+                    if (fnName == "mapLeft")
+                    {
+                        if (call.Arguments.Count > 1)
+                        {
+                            SSharpType funcType = CheckExpr(call.Arguments[0]);
+                            SSharpType eitherType = CheckExpr(call.Arguments[1]);
+                            if (eitherType is GenericType gt && gt.Name == "Either" && gt.TypeArgs.Count == 2 && funcType is FunctionType ft)
+                            {
+                                return new GenericType("Either", new List<SSharpType> { ft.ReturnType, gt.TypeArgs[1] });
+                            }
+                        }
+                        return new GenericType("Either", new List<SSharpType> { SSharpType.Any, SSharpType.Any });
                     }
                     if (fnName is "append" or "appended")
                     {
@@ -1043,6 +1136,15 @@ public class TypeChecker
                                             return new GenericType("Map", new List<SSharpType> { retTuple.TypeArgs[0], retTuple.TypeArgs[1] });
                                         }
                                         if (fnName == "flatMap" && ft.ReturnType is GenericType retMap && retMap.Name == "Map") return retMap;
+                                    }
+                                    return container;
+                                }
+                                if (cGt.Name == "Either" && cGt.TypeArgs.Count == 2)
+                                {
+                                    if (arg1 is FunctionType ft)
+                                    {
+                                        if (fnName == "map") return new GenericType("Either", new List<SSharpType> { cGt.TypeArgs[0], ft.ReturnType });
+                                        if (fnName == "flatMap" && ft.ReturnType is GenericType retEither && retEither.Name == "Either") return retEither;
                                     }
                                     return container;
                                 }
@@ -1513,9 +1615,9 @@ public class TypeChecker
                 switch (variance)
                 {
                     case Variance.Covariant:
-                        if (subGt.TypeArgs[i] == SSharpType.Any && (subGt.Name is "Option" or "List" or "Some" or "None" or "Cons" or "Nil"))
+                        if (subGt.TypeArgs[i] == SSharpType.Any && (subGt.Name is "Option" or "List" or "Some" or "None" or "Cons" or "Nil" or "Either" or "Left" or "Right"))
                         {
-                            // None / Nil / empty with Any element type acts as bottom type for covariant Option/List
+                            // None / Nil / Left / Right with Any element type acts as bottom type for covariant structures
                             continue;
                         }
                         if (!IsSubtype(subGt.TypeArgs[i], superGt.TypeArgs[i])) return false;
@@ -1569,9 +1671,9 @@ public class TypeChecker
 
         if (a is GenericType gtA && b is GenericType gtB && gtA.Name == gtB.Name && gtA.TypeArgs.Count == gtB.TypeArgs.Count)
         {
-            if (gtA.Name is "Option" or "List" or "Some" or "Cons" or "Nil" or "None")
+            if (gtA.Name is "Option" or "List" or "Some" or "Cons" or "Nil" or "None" or "Either" or "Left" or "Right")
             {
-                string targetName = (gtA.Name is "Some" or "None") ? "Option" : (gtA.Name is "Cons" or "Nil" ? "List" : gtA.Name);
+                string targetName = (gtA.Name is "Some" or "None") ? "Option" : (gtA.Name is "Cons" or "Nil" ? "List" : (gtA.Name is "Left" or "Right" ? "Either" : gtA.Name));
                 var commonArgs = new List<SSharpType>();
                 for (int i = 0; i < gtA.TypeArgs.Count; i++)
                 {
@@ -1584,6 +1686,26 @@ public class TypeChecker
                 }
                 return new GenericType(targetName, commonArgs);
             }
+        }
+
+        // Left[L, R1] and Right[L2, R] unify to Either[L, R]
+        if (a is GenericType g1 && b is GenericType g2 &&
+            ((g1.Name == "Left" && g2.Name == "Right") || (g1.Name == "Right" && g2.Name == "Left") ||
+             (g1.Name == "Either" && (g2.Name == "Left" || g2.Name == "Right")) ||
+             (g2.Name == "Either" && (g1.Name == "Left" || g1.Name == "Right"))))
+        {
+            var leftSide = g1.Name == "Left" ? g1 : (g2.Name == "Left" ? g2 : (g1.Name == "Either" ? g1 : g2));
+            var rightSide = g1.Name == "Right" ? g1 : (g2.Name == "Right" ? g2 : (g2.Name == "Either" ? g2 : g1));
+
+            var lType = leftSide.TypeArgs.Count > 0 && leftSide.TypeArgs[0] != SSharpType.Any 
+                ? leftSide.TypeArgs[0] 
+                : (rightSide.TypeArgs.Count > 0 ? rightSide.TypeArgs[0] : SSharpType.Any);
+
+            var rType = rightSide.TypeArgs.Count > 1 && rightSide.TypeArgs[1] != SSharpType.Any 
+                ? rightSide.TypeArgs[1] 
+                : (leftSide.TypeArgs.Count > 1 ? leftSide.TypeArgs[1] : (rightSide.TypeArgs.Count == 1 ? rightSide.TypeArgs[0] : SSharpType.Any));
+
+            return new GenericType("Either", new List<SSharpType> { lType, rType });
         }
 
         if (a is PrimitiveType ptA && _classes.TryGetValue(ptA.Name, out var clsA) && clsA.ExtendsType != null)
@@ -1622,6 +1744,13 @@ public class TypeChecker
             {
                 SpecializeNilOrNone(ifExpr.ThenBranch, targetType);
                 SpecializeNilOrNone(ifExpr.ElseBranch, targetType);
+            }
+            else if (expr is CallExpr call && call.Callee is IdentifierExpr calleeId)
+            {
+                if (calleeId.Name == "Left" || calleeId.Name == "Right")
+                {
+                    ResolvedTypes[call] = targetType;
+                }
             }
         }
     }

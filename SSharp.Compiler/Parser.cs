@@ -112,6 +112,7 @@ public class Parser
             }
         }
 
+        if (Match(TokenType.Data)) return ParseDataDecl();
         if (Match(TokenType.TypeAlias)) return ParseTypeAliasDecl();
         if (Match(TokenType.Def)) return ParseFunDecl(isTailRec);
         if (isTailRec)
@@ -150,6 +151,41 @@ public class Parser
         Match(TokenType.Semicolon);
         return new TypeAliasDecl(name.Lexeme, typeParams, target, name.Line, name.Column);
     }
+
+    private Decl ParseDataDecl()
+    {
+        Token name = Consume(TokenType.Identifier, "Expected data type name after 'data'.");
+        List<TypeParam> typeParams = ParseTypeParams();
+        Consume(TokenType.Assign, "Expected '=' after data type name.");
+
+        var constructors = new List<DataConstructor>();
+        do
+        {
+            Token ctorName = Consume(TokenType.Identifier, "Expected constructor name.");
+            var @params = new List<Param>();
+
+            if (Match(TokenType.LParen))
+            {
+                if (!Check(TokenType.RParen))
+                {
+                    do
+                    {
+                        Token paramName = Consume(TokenType.Identifier, "Expected parameter name.");
+                        Consume(TokenType.Colon, "Expected ':' after parameter name.");
+                        TypeNode paramType = ParseType();
+                        @params.Add(new Param(paramName.Lexeme, paramType, paramName.Line, paramName.Column));
+                    } while (Match(TokenType.Comma));
+                }
+                Consume(TokenType.RParen, "Expected ')' after constructor parameters.");
+            }
+
+            constructors.Add(new DataConstructor(ctorName.Lexeme, @params, ctorName.Line, ctorName.Column));
+        } while (Match(TokenType.Bar));
+
+        Match(TokenType.Semicolon);
+        return new DataDecl(name.Lexeme, typeParams, constructors, name.Line, name.Column);
+    }
+
 
     private List<TypeParam> ParseTypeParams()
     {

@@ -129,14 +129,6 @@ public sealed class SSharpMap<K, V>
         return acc;
     }
 
-    public void Foreach(Action<SSharpTuple2<K, V>> action)
-    {
-        foreach (var kv in _inner)
-        {
-            action(new SSharpTuple2<K, V>(kv.Key, kv.Value));
-        }
-    }
-
     // ── Conversions ───────────────────────────────────────────────────────────
 
     public SSharpList<SSharpTuple2<K, V>> ToList()

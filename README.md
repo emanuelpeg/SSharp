@@ -14,7 +14,7 @@
 <p align="center">
   <a href="https://github.com/emanuelpeg/SSharp/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://dotnet.microsoft.com/download"><img src="https://img.shields.io/badge/.NET-10.0-purple.svg" alt=".NET 10.0"></a>
-  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-54%20passing-brightgreen.svg" alt="Spec Tests"></a>
+  <a href="SSharp.Spec/"><img src="https://img.shields.io/badge/Spec_Tests-58%20passing-brightgreen.svg" alt="Spec Tests"></a>
 </p>
 
 ---
@@ -26,19 +26,19 @@
 ## Features
 
 - **Immutable bindings** with `val`
+- **Native Algebraic Data Types (`data`)** — concise sum types without OO inheritance (`data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double) | Dot`) plus automatic pure field selector functions (`radius(shape)`)
 - **Type Aliases (`type`)** — transparent type synonyms for higher-order functions, tuples, and types with parameterization (`type Predicate[A] = A => Boolean`, `type Point = (Double, Double)`)
 - **First-class functions** and lambdas (including support for **multiple parameter lists** and **partial application / currying**)
 - **Pipe operator (`|>`)** — forward data flow and composition without nested function calls or OO method chains
 - **N-ary Tuples (`(a, b, ...)`)** — native literal syntax for heterogeneous tuples (`Tuple2` to `Tuple8`), type annotations `(T1, T2, ...)`, positional access (`t._1`, `t._2`), and pattern matching deconstruction
 - **For-Comprehensions** — syntactic sugar for monadic pipelines (`for { x <- xs; y <- ys; if cond } yield expr`), desugared directly into pure calls to Prelude free functions (`flatMap`, `map`, `filter`)
-- **Algebraic Data Types** via `sealed trait`, `case class`, and `case object`
 - **Pattern matching** with `match`/`case` (including constructor, literal, identifier, wildcard, tuple, infix list `head::tail` patterns, **pattern guards (`if`)**, and **as-patterns (`@`)**)
 - **List Construction** via `List(1, 2, 3)` factory or right-associative cons syntax `1 :: 2 :: 3 :: Nil` (where `Nil` is the empty list)
 - **Expression-based** syntax — everything is an expression, including `if` and blocks `{ }`
 - **Generic functions** and data types with **covariance (`+T`) and contravariance (`-T`)** — Scala-style variance annotations
 - **Recursive functions** (including **tail-call optimization** via `@tailrec` compilation to imperative loops)
 - **Built-in types**: `Int`, `Double`, `String`, `Boolean`, `Unit`
-- **Runtime library & Functional Prelude**: `List[A]`, `Option[A]`, `Set[A]`, `Map[K, V]`, `Tuple2`–`Tuple8`, pure higher-order free functions (`map`, `filter`, `take`, `drop`, `foldLeft`, `sum`), and standard `print`/`println`/`readLine`
+- **Runtime library & Functional Prelude**: `List[A]`, `Option[A]`, `Either[L, R]`, `Set[A]`, `Map[K, V]`, `Tuple2`–`Tuple8`, pure higher-order free functions (`map`, `filter`, `take`, `drop`, `foldLeft`, `sum`), and standard `print`/`println`/`readLine`
 - **Stateless Eval API** — REST (`POST /api/eval`) & gRPC (`ssharp.EvalService/Eval`) with automatic `typeInfo` resolution
 - **Rust-style compiler diagnostics** — informative formatting pinpointing file, line, and column for errors
 - **Transpiles to C#** — output is clean, human-readable C# source code
@@ -50,12 +50,12 @@
 ```
 SSharp/
 ├── SSharp.Compiler/     # Lexer, Parser, TypeChecker, CodeGenerator
-├── SSharp.Runtime/      # Runtime library (List, Option, Set, Map, Tuple2-Tuple8, Unit, Predef)
+├── SSharp.Runtime/      # Runtime library (List, Option, Either, Set, Map, Tuple2-Tuple8, Unit, Predef)
 ├── SSharp.Backend/      # Roslyn-based in-memory evaluator & .NET assembly compiler
 ├── SSharp.Api/          # REST (POST /api/eval) & gRPC Evaluation API
 ├── SSharp.Repl/         # Stateful REPL session engine
 ├── SSharp.CLI/          # Command-line compiler driver
-├── SSharp.Spec/         # Language specification test suite (54 verified FP cases)
+├── SSharp.Spec/         # Language specification test suite (58 verified FP cases)
 ├── SSharp.Tests/        # Unit tests for compiler, transpiler & API
 ├── Sample/              # Sample programs (hello.ss, pipe.ss, tuples.ss, guards.ss, for_comprehension.ss, collections.ss, etc.)
 └── vscode-ssharp/       # VS Code extension for syntax highlighting (.ss, .ssharp)
@@ -252,14 +252,24 @@ val result: Int = {
 }
 ```
 
-### Algebraic Data Types
+### Native Algebraic Data Types (`data`)
+
+SSharp provides native syntax for defining Algebraic Data Types (Sum Types) without object-oriented ceremony (`sealed trait`, `extends`). Each constructor with parameters also generates pure, free field selector functions (`radius(shape)`, `width(shape)`):
 
 ```scala
-sealed trait Shape
-case class Circle(radius: Double) extends Shape
-case class Rectangle(width: Double, height: Double) extends Shape
-case object EmptyShape extends Shape
+// Native ADT definition:
+data Shape = Circle(radius: Double) | Rectangle(width: Double, height: Double) | Dot
+
+// Constructing values:
+val c: Shape = Circle(10.0)
+val r: Shape = Rectangle(4.0, 5.0)
+val d: Shape = Dot
+
+// Pure selector functions (no dot notation):
+val rad = radius(c) // 10.0
+val w   = width(r)  // 4.0
 ```
+
 
 ### Pattern Matching
 

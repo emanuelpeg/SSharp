@@ -248,6 +248,40 @@ public static class Predef
     /// <summary>Flattens a nested Option (Option[Option[T]] -> Option[T]).</summary>
     public static SSharpOption<T> flatten<T>(SSharpOption<SSharpOption<T>> opt) => opt.Flatten<T>();
 
+    // -- Either factories -----------------------------------------------------
+
+    /// <summary>Creates a Left either.</summary>
+    public static Left<L, R> Left<L, R>(L value) => new Left<L, R>(value);
+
+    /// <summary>Creates a Right either.</summary>
+    public static Right<L, R> Right<L, R>(R value) => new Right<L, R>(value);
+
+    // -- Either free functions ------------------------------------------------
+
+    /// <summary>Returns true if the either is a Left.</summary>
+    public static bool isLeft<L, R>(SSharpEither<L, R> e) => e.IsLeft;
+
+    /// <summary>Returns true if the either is a Right.</summary>
+    public static bool isRight<L, R>(SSharpEither<L, R> e) => e.IsRight;
+
+    /// <summary>Returns the right value if Right, or defaultVal otherwise.</summary>
+    public static R getOrElse<L, R>(R defaultVal, SSharpEither<L, R> e) => e.GetOrElse(() => defaultVal);
+
+    /// <summary>Maps the right value of an Either.</summary>
+    public static SSharpEither<L, B> map<L, R, B>(Func<R, B> f, SSharpEither<L, R> e) => e.Map(f);
+
+    /// <summary>Maps the right value of an Either (explicit alias mapEither).</summary>
+    public static SSharpEither<L, B> mapEither<L, R, B>(Func<R, B> f, SSharpEither<L, R> e) => e.Map(f);
+
+    /// <summary>Maps the left value of an Either.</summary>
+    public static SSharpEither<A, R> mapLeft<L, R, A>(Func<L, A> f, SSharpEither<L, R> e) => e.MapLeft(f);
+
+    /// <summary>FlatMaps the right value of an Either.</summary>
+    public static SSharpEither<L, B> flatMap<L, R, B>(Func<R, SSharpEither<L, B>> f, SSharpEither<L, R> e) => e.FlatMap(f);
+
+    /// <summary>Folds over Either applying fa if Left, fb if Right.</summary>
+    public static T fold<L, R, T>(Func<L, T> fa, Func<R, T> fb, SSharpEither<L, R> e) => e.Fold(fa, fb);
+
     // -- List extended free functions -----------------------------------------
 
     /// <summary>Returns Some(head) if non-empty, None otherwise (Haskell: listToMaybe).</summary>
